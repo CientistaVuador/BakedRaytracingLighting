@@ -69,7 +69,7 @@
     <maven.compiler.source>17</maven.compiler.source>
     <lwjgl.natives>natives-windows</lwjgl.natives>
     <joml.version>1.10.5</joml.version>
-    <lwjgl.version>3.3.2</lwjgl.version>
+    <lwjgl.version>3.3.3</lwjgl.version>
     <maven.compiler.target>17</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
