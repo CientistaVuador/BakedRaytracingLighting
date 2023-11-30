@@ -26,6 +26,9 @@
  */
 package cientistavuador.bakedlighting.geometry;
 
+import cientistavuador.bakedlighting.resources.mesh.MeshData;
+import java.util.Map;
+
 /**
  *
  * @author Cien
@@ -37,7 +40,7 @@ public class Geometries {
     }
     
     public static void init() {
-
+        
     }
 
     private Geometries() {

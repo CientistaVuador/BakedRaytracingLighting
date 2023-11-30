@@ -26,6 +26,10 @@
  */
 package cientistavuador.bakedlighting;
 
+import cientistavuador.bakedlighting.camera.FreeCamera;
+import cientistavuador.bakedlighting.debug.AabRender;
+import cientistavuador.bakedlighting.ubo.CameraUBO;
+import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import java.nio.FloatBuffer;
 import org.joml.Matrix4f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -44,25 +48,34 @@ public class Game {
     public static Game get() {
         return GAME;
     }
-    
+
+    private final FreeCamera camera = new FreeCamera();
+
     private Game() {
-        
+
     }
 
     public void start() {
-        
+        camera.setPosition(0, 1f, 25f);
+        camera.setUBO(CameraUBO.create(UBOBindingPoints.PLAYER_CAMERA));
     }
 
     public void loop() {
+        camera.updateMovement();
+        Matrix4f cameraProjectionView = new Matrix4f(this.camera.getProjectionView());
+
+        AabRender.renderQueue(camera);
         
+        Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";
+        Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
     }
 
     public void mouseCursorMoved(double x, double y) {
-        
+        camera.mouseCursorMoved(x, y);
     }
 
     public void windowSizeChanged(int width, int height) {
-
+        camera.setDimensions(width, height);
     }
 
     public void keyCallback(long window, int key, int scancode, int action, int mods) {
@@ -70,6 +83,6 @@ public class Game {
     }
 
     public void mouseCallback(long window, int button, int action, int mods) {
-        
+
     }
 }

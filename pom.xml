@@ -25,6 +25,7 @@
                     <include>**/*.ogg</include>
                     <include>**/*.zip</include>
                     <include>**/*.obj</include>
+                    <include>**/*.gz</include>
                 </includes>
             </resource>
         </resources>

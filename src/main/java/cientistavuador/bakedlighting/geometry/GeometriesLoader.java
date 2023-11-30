@@ -29,6 +29,12 @@ package cientistavuador.bakedlighting.geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.resources.mesh.MeshResources;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -41,60 +47,67 @@ public class GeometriesLoader {
 
     public static final boolean DEBUG_OUTPUT = true;
 
-    public static MeshData[] load(String... names) {
+    public static Map<String, MeshData> load(String... names) {
         if (names.length == 0) {
             if (DEBUG_OUTPUT) {
                 System.out.println("No geometries to load.");
             }
-            return new MeshData[0];
+            return new HashMap<>();
         }
 
         if (DEBUG_OUTPUT) {
             System.out.println("Loading geometries...");
         }
 
-        ArrayDeque<Future<MeshData>> futureDatas = new ArrayDeque<>();
-        MeshData[] datas = new MeshData[names.length];
-
-        for (int i = 0; i < datas.length; i++) {
+        ArrayDeque<Future<MeshData[]>> futureDatas = new ArrayDeque<>();
+        List<MeshData> datas = new ArrayList<>();
+        
+        for (int i = 0; i < names.length; i++) {
             final int index = i;
             if (DEBUG_OUTPUT) {
-                System.out.println("Loading geometry '" + names[index] + "' with index " + index);
+                System.out.println("Loading geometry '" + names[index]);
             }
             futureDatas.add(CompletableFuture.supplyAsync(() -> {
-                MeshData e = MeshResources.load(names[index]);
+                MeshData[] e = MeshResources.load(names[index]);
                 if (DEBUG_OUTPUT) {
-                    System.out.println("Finished loading geometry '" + names[index] + "' with index " + index + ": " + (e.getVertices().length / MeshData.SIZE) + " vertices, " + e.getIndices().length + " indices.");
+                    for (MeshData m:e) {
+                        System.out.println("Finished loading geometry '" + m.getName() + ": " + (m.getVertices().length / MeshData.SIZE) + " vertices, " + m.getIndices().length + " indices.");
+                    }
                 }
                 return e;
             }));
         }
 
-        Future<MeshData> future;
+        Future<MeshData[]> future;
         int index = 0;
         while ((future = futureDatas.poll()) != null) {
             try {
-                datas[index] = future.get();
+                datas.addAll(Arrays.asList(future.get()));
                 index++;
             } catch (InterruptedException | ExecutionException ex) {
                 throw new RuntimeException(ex);
             }
         }
         
-        for (int i = 0; i < datas.length; i++) {
+        for (int i = 0; i < datas.size(); i++) {
+            MeshData data = datas.get(i);
             if (DEBUG_OUTPUT) {
-                System.out.println("Sending geometry '" + names[i] + "', index " + i + " to the gpu.");
+                System.out.println("Sending geometry '" + data.getName() + "', index " + i + " to the gpu.");
             }
-            int vao = datas[i].getVAO();
+            int vao = data.getVAO();
             if (DEBUG_OUTPUT) {
-                System.out.println("Finished sending geometry '" + names[i] + "', index " + i + " to the gpu with object id "+vao+".");
+                System.out.println("Finished sending geometry '" + data.getName() + "', index " + i + " to the gpu with object id "+vao+".");
             }
         }
 
         if (DEBUG_OUTPUT) {
             System.out.println("Finished loading geometries.");
         }
-        return datas;
+        HashMap<String, MeshData> map = new HashMap<>();
+        for (MeshData m:datas) {
+            map.put(m.getName(), m);
+        }
+        return map;
     }
 
     private GeometriesLoader() {

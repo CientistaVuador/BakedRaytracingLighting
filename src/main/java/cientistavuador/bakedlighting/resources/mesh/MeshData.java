@@ -26,6 +26,7 @@
  */
 package cientistavuador.bakedlighting.resources.mesh;
 
+import cientistavuador.bakedlighting.Main;
 import java.util.Arrays;
 import static org.lwjgl.opengl.GL33C.*;
 
@@ -38,13 +39,20 @@ public class MeshData {
     public static final int SIZE = 3 + 2 + 3;
 
     //position (vec3), texture/uv (vec2), normal (vec3)
+    private final String name;
     private final float[] vertices;
     private final int[] indices;
     private int vao = 0;
+    private int textureHint = 0;
 
-    public MeshData(float[] vertices, int[] indices) {
+    public MeshData(String name, float[] vertices, int[] indices) {
+        this.name = name;
         this.vertices = vertices;
         this.indices = indices;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public float[] getVertices() {
@@ -110,6 +118,32 @@ public class MeshData {
         }
     }
 
+    public int getTextureHint() {
+        return textureHint;
+    }
+
+    public void setTextureHint(int textureHint) {
+        this.textureHint = textureHint;
+    }
+    
+    public void bind() {
+        glBindVertexArray(getVAO());
+    }
+    
+    public void render(int offset, int length) {
+        glDrawElements(GL_TRIANGLES, length, GL_UNSIGNED_INT, offset * Integer.BYTES);
+        Main.NUMBER_OF_DRAWCALLS++;
+        Main.NUMBER_OF_VERTICES += length;
+    }
+    
+    public void render() {
+        render(0, this.indices.length);
+    }
+    
+    public void unbind() {
+        glBindVertexArray(0);
+    }
+    
     @Override
     public int hashCode() {
         int hash = 7;

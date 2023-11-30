@@ -32,10 +32,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 
 /**
  * Obj parser for blender generated obj files with triangulated faces and no materials.
@@ -43,7 +46,7 @@ import java.util.regex.Pattern;
  */
 public class MeshResources {
 
-    public static MeshData load(String name) {
+    public static MeshData[] load(String name) {
         try {
             return new MeshResources(name).get();
         } catch (IOException ex) {
@@ -56,6 +59,8 @@ public class MeshResources {
     private int currentLine = 0;
 
     //parsing
+    private String objectName = "";
+    
     private float[] positions = new float[64];
     private float[] textures = new float[64];
     private float[] normals = new float[64];
@@ -74,14 +79,21 @@ public class MeshResources {
     private float[] vertices = new float[64];
     private int verticesIndex = 0;
 
+    //output
+    private final List<MeshData> output = new ArrayList<>();
+    private boolean firstOutput = true;
+    
     private MeshResources(String name) {
         this.name = name;
     }
-
-    public MeshData get() throws IOException {
+    
+    public MeshData[] get() throws IOException {
         InputStream stream = MeshResources.class.getResourceAsStream(this.name);
         if (stream == null) {
             throw new IOException("'"+this.name+"' not found.");
+        }
+        if (this.name.endsWith(".gz")) {
+            stream = new GZIPInputStream(stream, 8192);
         }
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(
@@ -94,11 +106,25 @@ public class MeshResources {
                 processLine(line);
             }
         }
+        pushOutput();
+        return this.output.toArray(MeshData[]::new);
+    }
+    
+    private void pushOutput() {
+        if (this.firstOutput) {
+            this.firstOutput = false;
+            if (this.facesIndex == 0) {
+                return;
+            }
+        }
         generateIndices();
         generateVertices();
-        return generateMeshData();
+        this.output.add(generateMeshData());
+        this.verticesIndex = 0;
+        this.indicesIndex = 0;
+        this.facesIndex = 0;
     }
-
+    
     private void pushPosition(float x, float y, float z) {
         if ((this.positionsIndex + 3) > this.positions.length) {
             this.positions = Arrays.copyOf(this.positions, (this.positions.length * 2) + 3);
@@ -203,6 +229,15 @@ public class MeshResources {
                             parseFaceInt(subsplit, 1, i) - 1,
                             parseFaceInt(subsplit, 2, i) - 1
                     );
+                }
+            }
+            case "o" -> {
+                pushOutput();
+                String[] nameSplit = line.split(" ", 2);
+                if (nameSplit.length == 2) {
+                    this.objectName = "@"+nameSplit[1];
+                } else {
+                    this.objectName = "";
                 }
             }
         }
@@ -312,6 +347,7 @@ public class MeshResources {
 
     private MeshData generateMeshData() {
         return new MeshData(
+                this.name+this.objectName,
                 Arrays.copyOf(this.vertices, this.verticesIndex),
                 Arrays.copyOf(this.indices, this.indicesIndex)
         );
