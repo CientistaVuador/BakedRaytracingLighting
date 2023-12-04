@@ -70,7 +70,6 @@ public class BetterUniformSetter {
                 String uniform = glGetActiveUniform(program, i, stack.callocInt(1), stack.callocInt(1));
                 this.uniforms[i] = uniform;
                 this.locations.put(uniform, glGetUniformLocation(program, uniform));
-                System.out.println(uniform);
             }
         }
     }

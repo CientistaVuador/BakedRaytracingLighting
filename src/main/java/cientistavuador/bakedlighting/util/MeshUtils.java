@@ -26,9 +26,14 @@
  */
 package cientistavuador.bakedlighting.util;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 /**
  *
@@ -36,17 +41,17 @@ import java.util.Map;
  */
 public class MeshUtils {
 
-    public static void generateTangent(float[] vertices, int size, int xyzOffset, int uvOffset, int outTangentXYZOffset) {
-        if (vertices.length % size != 0) {
+    public static void generateTangent(float[] vertices, int vertexSize, int xyzOffset, int uvOffset, int outTangentXYZOffset) {
+        if (vertices.length % vertexSize != 0) {
             throw new IllegalArgumentException("Wrong size.");
         }
-        if (vertices.length % 3 != 0) {
+        if (vertices.length % (3 * vertexSize) != 0) {
             throw new IllegalArgumentException("Not a triangulated mesh.");
         }
-        for (int v = 0; v < vertices.length; v += (size * 3)) {
+        for (int v = 0; v < vertices.length; v += (vertexSize * 3)) {
             int v0 = v;
-            int v1 = v + size;
-            int v2 = v + (size * 2);
+            int v1 = v + vertexSize;
+            int v2 = v + (vertexSize * 2);
 
             float v0x = vertices[v0 + xyzOffset + 0];
             float v0y = vertices[v0 + xyzOffset + 1];
@@ -86,11 +91,11 @@ public class MeshUtils {
             float tangentY = f * ((deltaUV2v * edge1y) - (deltaUV1v * edge2y));
             float tangentZ = f * ((deltaUV2v * edge1z) - (deltaUV1v * edge2z));
 
-            float length = (float) (1.0 / Math.sqrt((tangentX*tangentX) + (tangentY * tangentY) + (tangentZ * tangentZ)));
+            float length = (float) (1.0 / Math.sqrt((tangentX * tangentX) + (tangentY * tangentY) + (tangentZ * tangentZ)));
             tangentX *= length;
             tangentY *= length;
             tangentZ *= length;
-            
+
             vertices[v0 + outTangentXYZOffset + 0] = tangentX;
             vertices[v0 + outTangentXYZOffset + 1] = tangentY;
             vertices[v0 + outTangentXYZOffset + 2] = tangentZ;
@@ -188,7 +193,7 @@ public class MeshUtils {
             }
             indices[indicesIndex] = vertexCount;
             indicesIndex++;
-            
+
             vertexCount++;
         }
 
@@ -198,8 +203,160 @@ public class MeshUtils {
         );
     }
 
-    public static void generateLightmapUV(float[] vertices) {
+    private static class TriangleQuad {
 
+        float area;
+        float size;
+        int triangleVertex;
+
+        public TriangleQuad(float area, int triangleVertex) {
+            this.area = area;
+            this.size = (float) Math.sqrt(area);
+            this.triangleVertex = triangleVertex;
+        }
+
+    }
+
+    public static void generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int outLightmapUV, int lightmapSize) {
+        if (vertices.length % vertexSize != 0) {
+            throw new IllegalArgumentException("Wrong size.");
+        }
+        if (vertices.length % (3 * vertexSize) != 0) {
+            throw new IllegalArgumentException("Not a triangulated mesh.");
+        }
+        if (vertices.length == 0) {
+            return;
+        }
+        Comparator<TriangleQuad> comparator = (o1, o2) -> {
+            if (o1.area < o2.area) {
+                return 1;
+            }
+            if (o1.area > o2.area) {
+                return -1;
+            }
+            return 0;
+        };
+        TriangleQuad[] quads = new TriangleQuad[(vertices.length / vertexSize) / 3];
+        for (int v = 0; v < vertices.length; v += (vertexSize * 3)) {
+            int v0 = v;
+            int v1 = v + vertexSize;
+            int v2 = v + (vertexSize * 2);
+
+            float v0x = vertices[v0 + xyzOffset + 0];
+            float v0y = vertices[v0 + xyzOffset + 1];
+            float v0z = vertices[v0 + xyzOffset + 2];
+
+            float v1x = vertices[v1 + xyzOffset + 0];
+            float v1y = vertices[v1 + xyzOffset + 1];
+            float v1z = vertices[v1 + xyzOffset + 2];
+
+            float v2x = vertices[v2 + xyzOffset + 0];
+            float v2y = vertices[v2 + xyzOffset + 1];
+            float v2z = vertices[v2 + xyzOffset + 2];
+
+            float a = (float) Math.sqrt(Math.pow(v0x - v1x, 2.0) + Math.pow(v0y - v1y, 2.0) + Math.pow(v0z - v1z, 2.0));
+            float b = (float) Math.sqrt(Math.pow(v1x - v2x, 2.0) + Math.pow(v1y - v2y, 2.0) + Math.pow(v1z - v2z, 2.0));
+            float c = (float) Math.sqrt(Math.pow(v2x - v0x, 2.0) + Math.pow(v2y - v0y, 2.0) + Math.pow(v2z - v0z, 2.0));
+
+            float sp = (a + b + c) * 0.5f;
+            float area = (float) Math.sqrt(sp * (sp - a) * (sp - b) * (sp - c));
+
+            TriangleQuad quad = new TriangleQuad(area, v0);
+            quads[(v0 / vertexSize) / 3] = quad;
+        }
+        Arrays.sort(quads, comparator);
+        float totalArea = 0f;
+        for (TriangleQuad q : quads) {
+            totalArea += q.area;
+        }
+        for (TriangleQuad q : quads) {
+            float quadSize = (float) Math.floor(Math.sqrt((q.area / totalArea) * (lightmapSize * lightmapSize)));
+            q.area = quadSize * quadSize;
+            q.size = quadSize;
+        }
+        Queue<TriangleQuad> queue = new ArrayDeque<>(Arrays.asList(quads));
+        List<TriangleQuad> refusedQuads = new ArrayList<>();
+        int[] lightmapOccupation = new int[lightmapSize * lightmapSize];
+        int x = 0;
+        int y = 0;
+        int quadIndex = 1;
+        while (!queue.isEmpty()) {
+            fitQuad:
+            {
+                findNext:
+                for (; y < lightmapSize; y++) {
+                    for (; x < lightmapSize; x++) {
+                        if (lightmapOccupation[x + (y * lightmapSize)] == 0) {
+                            break findNext;
+                        }
+                    }
+                }
+
+                TriangleQuad quad = queue.poll();
+
+                float maxX = (x + quad.size) + 0.5f;
+                float maxY = (y + quad.size) + 0.5f;
+
+                boolean enoughSpace = true;
+                if (maxX >= lightmapSize || maxY >= lightmapSize) {
+                    enoughSpace = false;
+                } else {
+                    for (int i = 0; i < (int) quad.area; i++) {
+                        int qX = i % (int) quad.size;
+                        int qY = i / (int) quad.size;
+                        if (lightmapOccupation[(x + qX) + ((y + qY) * lightmapSize)] != 0) {
+                            enoughSpace = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (!enoughSpace) {
+                    refusedQuads.add(quad);
+                    break fitQuad;
+                }
+
+                int v0 = quad.triangleVertex;
+                int v1 = quad.triangleVertex + vertexSize;
+                int v2 = quad.triangleVertex + (vertexSize * 2);
+
+                vertices[v0 + outLightmapUV + 0] = (x + 0.5f) / lightmapSize;
+                vertices[v0 + outLightmapUV + 1] = (y + 0.5f) / lightmapSize;
+
+                vertices[v1 + outLightmapUV + 0] = ((x + quad.size) + 0.5f) / lightmapSize;
+                vertices[v1 + outLightmapUV + 1] = (y + 0.5f) / lightmapSize;
+
+                vertices[v2 + outLightmapUV + 0] = (x + 0.5f) / lightmapSize;
+                vertices[v2 + outLightmapUV + 1] = ((y + quad.size) + 0.5f) / lightmapSize;
+
+                for (int i = 0; i < (int) quad.area; i++) {
+                    int qX = i % (int) quad.size;
+                    int qY = i / (int) quad.size;
+                    lightmapOccupation[(x + qX) + ((y + qY) * lightmapSize)] = quadIndex;
+                }
+
+                quadIndex++;
+            }
+            if (queue.isEmpty() && !refusedQuads.isEmpty()) {
+                x++;
+                if (x >= lightmapSize) {
+                    x = 0;
+                    y++;
+                }
+                if (y >= lightmapSize) {
+                    x = 0;
+                    y = 0;
+                    for (TriangleQuad q : refusedQuads) {
+                        q.size--;
+                        q.area = q.size * q.size;
+                    }
+                }
+                
+                refusedQuads.sort(comparator);
+                queue.addAll(refusedQuads);
+                refusedQuads.clear();
+            }
+        }
     }
 
     private MeshUtils() {

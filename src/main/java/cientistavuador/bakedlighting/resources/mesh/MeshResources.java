@@ -36,9 +36,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
@@ -48,7 +46,7 @@ import java.util.zip.GZIPInputStream;
  */
 public class MeshResources {
     
-    public static int LIGHTMAP_SIZE = 512;
+    public static int LIGHTMAP_SIZE = 256;
     
     public static MeshData[] load(String name) {
         try {
@@ -330,7 +328,13 @@ public class MeshResources {
                 MeshData.UV_OFFSET,
                 MeshData.T_XYZ_OFFSET
         );
-        MeshUtils.generateLightmapUV(newVertices);
+        MeshUtils.generateLightmapUV(
+                newVertices,
+                MeshData.SIZE,
+                MeshData.XYZ_OFFSET,
+                MeshData.L_UV_OFFSET,
+                MeshResources.LIGHTMAP_SIZE
+        );
         
         Pair<float[], int[]> verticesIndices = MeshUtils.generateIndices(
                 newVertices,

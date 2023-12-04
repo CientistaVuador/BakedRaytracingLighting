@@ -1373,8 +1373,8 @@ public class SoftwareRenderer {
     private boolean bilinearFilteringEnabled = false;
     private boolean multithreadEnabled = true;
     private boolean billboardingEnabled = false;
-    private boolean lightingEnabled = true;
-    private boolean sunEnabled = true;
+    private boolean lightingEnabled = false;
+    private boolean sunEnabled = false;
 
     //sun state
     private final Vector3f sunDirection = new Vector3f(-1f, -1f, -1f).normalize();
