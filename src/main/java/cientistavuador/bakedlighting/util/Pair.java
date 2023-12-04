@@ -24,37 +24,28 @@
  *
  * For more information, please refer to <https://unlicense.org>
  */
-package cientistavuador.bakedlighting.texture;
+package cientistavuador.bakedlighting.util;
 
 /**
  *
  * @author Cien
  */
-public class Textures {
+public class Pair<A, B> {
     
-    public static final int BRICKS;
-    public static final int CONCRETE;
-    public static final int GRASS;
-    public static final int RED;
+    private final A a;
+    private final B b;
     
-    static {
-        int[] textures = TexturesLoader.load(
-                "bricks.png",
-                "concrete.png",
-                "grass.png",
-                "red.png"
-        );
-        BRICKS = textures[0];
-        CONCRETE = textures[1];
-        GRASS = textures[2];
-        RED = textures[3];
+    public Pair(A a, B b) {
+        this.a = a;
+        this.b = b;
+    }
+
+    public A getA() {
+        return a;
+    }
+
+    public B getB() {
+        return b;
     }
     
-    public static void init() {
-        
-    }
-    
-    private Textures() {
-        
-    }
 }

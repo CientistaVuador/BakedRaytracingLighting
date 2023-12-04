@@ -28,10 +28,15 @@ package cientistavuador.bakedlighting;
 
 import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
+import cientistavuador.bakedlighting.geometry.Geometries;
+import cientistavuador.bakedlighting.resources.mesh.MeshData;
+import cientistavuador.bakedlighting.shader.GeometryProgram;
+import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import java.nio.FloatBuffer;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.openal.AL11.*;
 import static org.lwjgl.opengl.GL33C.*;
@@ -56,14 +61,35 @@ public class Game {
     }
 
     public void start() {
-        camera.setPosition(0, 1f, 25f);
+        camera.setPosition(0, 8f, 16f);
         camera.setUBO(CameraUBO.create(UBOBindingPoints.PLAYER_CAMERA));
+        
+        GeometryProgram program = GeometryProgram.INSTANCE;
+        program.use();
+        program.setModel(new Matrix4f());
+        program.setColor(1f, 1f, 1f, 1f);
+        program.setSunDirection(new Vector3f(-1f, -1f, 0f).normalize());
+        program.setSunDiffuse(1f, 1f, 1f);
+        program.setSunAmbient(0.2f, 0.2f, 0.2f);
+        program.setTextureUnit(0);
+        program.setLightingEnabled(true);
+        glUseProgram(0);
     }
 
     public void loop() {
         camera.updateMovement();
         Matrix4f cameraProjectionView = new Matrix4f(this.camera.getProjectionView());
 
+        GeometryProgram program = GeometryProgram.INSTANCE;
+        program.use();
+        program.setProjectionView(cameraProjectionView);
+        glActiveTexture(GL_TEXTURE0);
+        for (MeshData e:Geometries.GARAGE) {
+            glBindTexture(GL_TEXTURE_2D, e.getTextureHint());
+            e.bindRenderUnbind();
+        }
+        glUseProgram(0);
+        
         AabRender.renderQueue(camera);
         
         Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";

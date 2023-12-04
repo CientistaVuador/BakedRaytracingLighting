@@ -27,6 +27,8 @@
 package cientistavuador.bakedlighting.geometry;
 
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
+import cientistavuador.bakedlighting.resources.mesh.MeshResources;
+import cientistavuador.bakedlighting.texture.Textures;
 import java.util.Map;
 
 /**
@@ -35,8 +37,19 @@ import java.util.Map;
  */
 public class Geometries {
 
+    public static final MeshData[] GARAGE;
+    
     static {
-        
+        Map<String, MeshData> garage = GeometriesLoader.load("garage.obj.gz");
+        MeshData bricks = garage.get("garage.obj.gz@bricks");
+        MeshData concrete = garage.get("garage.obj.gz@concrete");
+        MeshData grass = garage.get("garage.obj.gz@grass");
+        MeshData red = garage.get("garage.obj.gz@red");
+        bricks.setTextureHint(Textures.BRICKS);
+        concrete.setTextureHint(Textures.CONCRETE);
+        grass.setTextureHint(Textures.GRASS);
+        red.setTextureHint(Textures.RED);
+        GARAGE = new MeshData[] {bricks, concrete, grass, red};
     }
     
     public static void init() {

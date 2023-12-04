@@ -24,37 +24,12 @@
  *
  * For more information, please refer to <https://unlicense.org>
  */
-package cientistavuador.bakedlighting.texture;
+package cientistavuador.bakedlighting.util;
 
 /**
  *
  * @author Cien
  */
-public class Textures {
+public class IntersectionUtils {
     
-    public static final int BRICKS;
-    public static final int CONCRETE;
-    public static final int GRASS;
-    public static final int RED;
-    
-    static {
-        int[] textures = TexturesLoader.load(
-                "bricks.png",
-                "concrete.png",
-                "grass.png",
-                "red.png"
-        );
-        BRICKS = textures[0];
-        CONCRETE = textures[1];
-        GRASS = textures[2];
-        RED = textures[3];
-    }
-    
-    public static void init() {
-        
-    }
-    
-    private Textures() {
-        
-    }
 }

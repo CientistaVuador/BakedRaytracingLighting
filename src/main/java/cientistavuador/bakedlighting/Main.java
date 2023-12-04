@@ -367,8 +367,8 @@ public class Main {
         Main.checkGLError();
 
         GLFonts.init(); //static initialize
-        Geometries.init(); //static initialize
         Textures.init(); //static initialize
+        Geometries.init(); //static initialize
         SoundSystem.init(); //static initialize
         Sounds.init(); //static initialize
         Cursors.init(); //static initialize

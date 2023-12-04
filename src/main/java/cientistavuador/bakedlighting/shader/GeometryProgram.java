@@ -199,17 +199,23 @@ public class GeometryProgram {
             layout (location = 0) in vec3 vertexPosition;
             layout (location = 1) in vec2 vertexUv;
             layout (location = 2) in vec3 vertexNormal;
+            layout (location = 3) in vec3 vertexTangent;
+            layout (location = 4) in vec2 vertexLightmapUv;
             
             out vec3 position;
             out vec2 uv;
-            out vec3 normal;
+            out vec3 linearNormal;
+            out vec3 linearTangent;
+            out vec2 lightmapUv;
             
             void main() {
                 vec4 pos = model * vec4(vertexPosition, 1.0);
                 
                 position = pos.xyz;
                 uv = vertexUv;
-                normal = normalize(normalModel * vertexNormal);
+                linearNormal = normalize(normalModel * vertexNormal);
+                linearTangent = normalize(normalModel * vertexTangent);
+                lightmapUv = vertexLightmapUv;
                 
                 gl_Position = projectionView * pos;
             }
@@ -238,13 +244,18 @@ public class GeometryProgram {
             
             in vec3 position;
             in vec2 uv;
-            in vec3 normal;
+            in vec3 linearNormal;
+            in vec3 linearTangent;
+            in vec2 lightmapUv;
             
             layout (location = 0) out vec4 colorOutput;
             
             const float gamma = 2.2;
             
             void main() {
+                vec3 normal = normalize(linearNormal);
+                vec3 tangent = normalize(linearTangent);
+                
                 vec4 textureColor = texture(tex, uv);
                 colorOutput = textureColor * color;
                 if (lightingEnabled) {

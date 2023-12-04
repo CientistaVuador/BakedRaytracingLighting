@@ -26,6 +26,8 @@
  */
 package cientistavuador.bakedlighting.resources.mesh;
 
+import cientistavuador.bakedlighting.util.MeshUtils;
+import cientistavuador.bakedlighting.util.Pair;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -45,7 +47,9 @@ import java.util.zip.GZIPInputStream;
  * @author Cien
  */
 public class MeshResources {
-
+    
+    public static int LIGHTMAP_SIZE = 512;
+    
     public static MeshData[] load(String name) {
         try {
             return new MeshResources(name).get();
@@ -71,14 +75,10 @@ public class MeshResources {
     private int normalsIndex = 0;
     private int facesIndex = 0;
     
-    //generate indices
-    private int[] indices = new int[64];
-    private int indicesIndex = 0;
-    
     //generate vertices
     private float[] vertices = new float[64];
     private int verticesIndex = 0;
-
+    
     //output
     private final List<MeshData> output = new ArrayList<>();
     private boolean firstOutput = true;
@@ -117,11 +117,9 @@ public class MeshResources {
                 return;
             }
         }
-        generateIndices();
         generateVertices();
         this.output.add(generateMeshData());
         this.verticesIndex = 0;
-        this.indicesIndex = 0;
         this.facesIndex = 0;
     }
     
@@ -285,24 +283,6 @@ public class MeshResources {
         }
     }
     
-    private void generateIndices() {
-        final Map<PositionTextureNormal, Integer> indicesMap = new HashMap<>();
-        final int amountOfVertices = this.facesIndex / 3;
-        for (int i = 0; i < amountOfVertices; i++) {
-            PositionTextureNormal e = new PositionTextureNormal(i);
-            Integer currentIndex = indicesMap.get(e);
-            if (currentIndex == null) {
-                indicesMap.put(e, i);
-                currentIndex = i;
-            }
-            if (this.indicesIndex + 1 > this.indices.length) {
-                this.indices = Arrays.copyOf(this.indices, (this.indices.length * 2) + 1);
-            }
-            this.indices[this.indicesIndex + 0] = currentIndex;
-            this.indicesIndex++;
-        }
-    }
-    
     private void pushVertex(int position, int texture, int normal) {
         float x = this.positions[(position * 3) + 0];
         float y = this.positions[(position * 3) + 1];
@@ -328,28 +308,39 @@ public class MeshResources {
     }
     
     private void generateVertices() {
-        int indexOffset = 0;
-        for (int i = 0; i < this.indicesIndex; i++) {
-            int index = this.indices[i];
-            if (index != i) {
-                this.indices[i] = this.indices[index];
-                indexOffset++;
-                continue;
-            }
+        for (int i = 0; i < this.facesIndex; i += 3) {
             pushVertex(
-                    this.faces[(i * 3) + 0],
-                    this.faces[(i * 3) + 1],
-                    this.faces[(i * 3) + 2]
+                    this.faces[i + 0],
+                    this.faces[i + 1],
+                    this.faces[i + 2]
             );
-            this.indices[i] = i - indexOffset;
         }
     }
 
     private MeshData generateMeshData() {
+        float[] newVertices = new float[(this.verticesIndex / 8) * MeshData.SIZE];
+        for (int i = 0; i < this.verticesIndex / 8; i++) {
+            System.arraycopy(this.vertices, i * 8, newVertices, i * MeshData.SIZE, 8);
+        }
+        
+        MeshUtils.generateTangent(
+                newVertices,
+                MeshData.SIZE,
+                MeshData.XYZ_OFFSET,
+                MeshData.UV_OFFSET,
+                MeshData.T_XYZ_OFFSET
+        );
+        MeshUtils.generateLightmapUV(newVertices);
+        
+        Pair<float[], int[]> verticesIndices = MeshUtils.generateIndices(
+                newVertices,
+                MeshData.SIZE
+        );
+        
         return new MeshData(
                 this.name+this.objectName,
-                Arrays.copyOf(this.vertices, this.verticesIndex),
-                Arrays.copyOf(this.indices, this.indicesIndex)
+                verticesIndices.getA(),
+                verticesIndices.getB()
         );
     }
 

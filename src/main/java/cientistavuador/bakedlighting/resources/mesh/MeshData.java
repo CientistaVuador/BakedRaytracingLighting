@@ -36,13 +36,21 @@ import static org.lwjgl.opengl.GL33C.*;
  */
 public class MeshData {
 
-    public static final int SIZE = 3 + 2 + 3;
-
-    //position (vec3), texture/uv (vec2), normal (vec3)
+    //position (vec3), texture uv (vec2), normal (vec3), tangent (vec3), lightmap uv (vec2)
+    public static final int SIZE = 3 + 2 + 3 + 3 + 2;
+    
+    public static final int XYZ_OFFSET = 0;
+    public static final int UV_OFFSET = 0 + 3;
+    public static final int N_XYZ_OFFSET = 0 + 3 + 2;
+    public static final int T_XYZ_OFFSET = 0 + 3 + 2 + 3;
+    public static final int L_UV_OFFSET = 0 + 3 + 2 + 3 + 3;
+    
     private final String name;
     private final float[] vertices;
     private final int[] indices;
     private int vao = 0;
+    private int ebo = 0;
+    private int vbo = 0;
     private int textureHint = 0;
 
     public MeshData(String name, float[] vertices, int[] indices) {
@@ -62,11 +70,11 @@ public class MeshData {
     public int getAmountOfVerticesComponents() {
         return vertices.length;
     }
-    
+
     public int getAmountOfVertices() {
         return vertices.length / MeshData.SIZE;
     }
-    
+
     public int[] getIndices() {
         return indices;
     }
@@ -74,7 +82,7 @@ public class MeshData {
     public int getAmountOfIndices() {
         return indices.length;
     }
-    
+
     public boolean hasVAO() {
         return this.vao != 0;
     }
@@ -83,27 +91,35 @@ public class MeshData {
         if (this.vao == 0) {
             this.vao = glGenVertexArrays();
             glBindVertexArray(this.vao);
-            
-            int ebo = glGenBuffers();
+
+            this.ebo = glGenBuffers();
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, getIndices(), GL_STATIC_DRAW);
 
-            int vbo = glGenBuffers();
+            this.vbo = glGenBuffers();
             glBindBuffer(GL_ARRAY_BUFFER, vbo);
             glBufferData(GL_ARRAY_BUFFER, getVertices(), GL_STATIC_DRAW);
-            
+
             //position
             glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, 0);
+            glVertexAttribPointer(0, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (XYZ_OFFSET * Float.BYTES));
 
             //texture
             glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (3 * Float.BYTES));
+            glVertexAttribPointer(1, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (UV_OFFSET * Float.BYTES));
 
             //normal
             glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, ((3 + 2) * Float.BYTES));
-
+            glVertexAttribPointer(2, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (N_XYZ_OFFSET * Float.BYTES));
+            
+            //tangent
+            glEnableVertexAttribArray(3);
+            glVertexAttribPointer(3, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (T_XYZ_OFFSET * Float.BYTES));
+            
+            //lightmap uv
+            glEnableVertexAttribArray(4);
+            glVertexAttribPointer(4, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (L_UV_OFFSET * Float.BYTES));
+            
             glBindBuffer(GL_ARRAY_BUFFER, 0);
 
             glBindVertexArray(0);
@@ -114,7 +130,11 @@ public class MeshData {
     public void deleteVAO() {
         if (this.vao != 0) {
             glDeleteVertexArrays(this.vao);
+            glDeleteBuffers(this.ebo);
+            glDeleteBuffers(this.vbo);
             this.vao = 0;
+            this.ebo = 0;
+            this.vbo = 0;
         }
     }
 
@@ -125,25 +145,31 @@ public class MeshData {
     public void setTextureHint(int textureHint) {
         this.textureHint = textureHint;
     }
-    
+
     public void bind() {
         glBindVertexArray(getVAO());
     }
-    
+
     public void render(int offset, int length) {
         glDrawElements(GL_TRIANGLES, length, GL_UNSIGNED_INT, offset * Integer.BYTES);
         Main.NUMBER_OF_DRAWCALLS++;
         Main.NUMBER_OF_VERTICES += length;
     }
-    
+
     public void render() {
         render(0, this.indices.length);
     }
-    
+
     public void unbind() {
         glBindVertexArray(0);
     }
-    
+
+    public void bindRenderUnbind() {
+        bind();
+        render();
+        unbind();
+    }
+
     @Override
     public int hashCode() {
         int hash = 7;
