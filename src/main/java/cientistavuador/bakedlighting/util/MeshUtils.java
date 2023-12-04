@@ -26,6 +26,10 @@
  */
 package cientistavuador.bakedlighting.util;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,13 +38,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import javax.imageio.ImageIO;
 
 /**
  *
  * @author Cien
  */
 public class MeshUtils {
-
+    
+    public static final float PRECISION_FIX = 1f/5000f;
+    
     public static void generateTangent(float[] vertices, int vertexSize, int xyzOffset, int uvOffset, int outTangentXYZOffset) {
         if (vertices.length % vertexSize != 0) {
             throw new IllegalArgumentException("Wrong size.");
@@ -283,28 +290,27 @@ public class MeshUtils {
         while (!queue.isEmpty()) {
             fitQuad:
             {
-                findNext:
-                for (; y < lightmapSize; y++) {
-                    for (; x < lightmapSize; x++) {
-                        if (lightmapOccupation[x + (y * lightmapSize)] == 0) {
-                            break findNext;
-                        }
+                for (int i = x + (y * lightmapSize); i < lightmapSize * lightmapSize; i++) {
+                    if (lightmapOccupation[i] == 0) {
+                        x = i % lightmapSize;
+                        y = i / lightmapSize;
+                        break;
                     }
                 }
-
+                
                 TriangleQuad quad = queue.poll();
-
-                float maxX = (x + quad.size) + 0.5f;
-                float maxY = (y + quad.size) + 0.5f;
-
+                
+                float maxX = (x + (quad.size - 1f)) + 0.5f;
+                float maxY = (y + (quad.size - 1f)) + 0.5f;
+                
                 boolean enoughSpace = true;
                 if (maxX >= lightmapSize || maxY >= lightmapSize) {
                     enoughSpace = false;
                 } else {
                     for (int i = 0; i < (int) quad.area; i++) {
-                        int qX = i % (int) quad.size;
-                        int qY = i / (int) quad.size;
-                        if (lightmapOccupation[(x + qX) + ((y + qY) * lightmapSize)] != 0) {
+                        int qX = (i % (int) quad.size) + x;
+                        int qY = (i / (int) quad.size) + y;
+                        if (lightmapOccupation[qX + (qY * lightmapSize)] != 0) {
                             enoughSpace = false;
                             break;
                         }
@@ -315,24 +321,24 @@ public class MeshUtils {
                     refusedQuads.add(quad);
                     break fitQuad;
                 }
-
+                
                 int v0 = quad.triangleVertex;
                 int v1 = quad.triangleVertex + vertexSize;
                 int v2 = quad.triangleVertex + (vertexSize * 2);
+                
+                vertices[v0 + outLightmapUV + 0] = (x + 0.5f - PRECISION_FIX) / lightmapSize;
+                vertices[v0 + outLightmapUV + 1] = (y + 0.5f - PRECISION_FIX) / lightmapSize;
 
-                vertices[v0 + outLightmapUV + 0] = (x + 0.5f) / lightmapSize;
-                vertices[v0 + outLightmapUV + 1] = (y + 0.5f) / lightmapSize;
+                vertices[v1 + outLightmapUV + 0] = ((x + (quad.size - 1f)) + 0.5f + PRECISION_FIX) / lightmapSize;
+                vertices[v1 + outLightmapUV + 1] = (y + 0.5f - PRECISION_FIX) / lightmapSize;
 
-                vertices[v1 + outLightmapUV + 0] = ((x + quad.size) + 0.5f) / lightmapSize;
-                vertices[v1 + outLightmapUV + 1] = (y + 0.5f) / lightmapSize;
-
-                vertices[v2 + outLightmapUV + 0] = (x + 0.5f) / lightmapSize;
-                vertices[v2 + outLightmapUV + 1] = ((y + quad.size) + 0.5f) / lightmapSize;
+                vertices[v2 + outLightmapUV + 0] = (x + 0.5f - PRECISION_FIX) / lightmapSize;
+                vertices[v2 + outLightmapUV + 1] = ((y + (quad.size - 1f)) + 0.5f + PRECISION_FIX) / lightmapSize;
 
                 for (int i = 0; i < (int) quad.area; i++) {
-                    int qX = i % (int) quad.size;
-                    int qY = i / (int) quad.size;
-                    lightmapOccupation[(x + qX) + ((y + qY) * lightmapSize)] = quadIndex;
+                    int qX = (i % (int) quad.size) + x;
+                    int qY = (i / (int) quad.size) + y;
+                    lightmapOccupation[qX + (qY * lightmapSize)] = quadIndex;
                 }
 
                 quadIndex++;

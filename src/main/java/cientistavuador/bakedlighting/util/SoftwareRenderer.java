@@ -1166,10 +1166,10 @@ public class SoftwareRenderer {
                 float minX = Math.min(Math.min(v0cx, v1cx), v2cx);
                 float minY = Math.min(Math.min(v0cy, v1cy), v2cy);
 
-                int maxXP = clamp(Math.round(maxX), 0, width);
-                int maxYP = clamp(Math.round(maxY), 0, height);
-                int minXP = clamp(Math.round(minX), 0, width - 1);
-                int minYP = clamp(Math.round(minY), 0, height - 1);
+                int maxXP = clamp((int) Math.ceil(maxX), 0, width);
+                int maxYP = clamp((int) Math.ceil(maxY), 0, height);
+                int minXP = clamp((int) Math.floor(minX), 0, width - 1);
+                int minYP = clamp((int) Math.floor(minY), 0, height - 1);
 
                 boolean multithreadActivated = (maxXP - minXP) >= 32 && this.renderer.isMultithreadEnabled();
 
@@ -1220,7 +1220,7 @@ public class SoftwareRenderer {
                 if (wv0 < 0f || wv1 < 0f || wv2 < 0f) {
                     continue;
                 }
-
+                
                 float invw = (wv0 * this.vertices[v0 + CW_INV]) + (wv1 * this.vertices[v1 + CW_INV]) + (wv2 * this.vertices[v2 + CW_INV]);
                 float w = 1f / invw;
 
