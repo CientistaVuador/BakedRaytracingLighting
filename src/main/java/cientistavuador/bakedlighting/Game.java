@@ -30,15 +30,10 @@ import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
-import cientistavuador.bakedlighting.resources.mesh.MeshResources;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
-import cientistavuador.bakedlighting.util.SoftwareRenderer;
-import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import javax.imageio.ImageIO;
+import cientistavuador.bakedlighting.util.RasterUtils;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.opengl.GL33C.*;
@@ -75,28 +70,6 @@ public class Game {
         program.setTextureUnit(0);
         program.setLightingEnabled(true);
         glUseProgram(0);
-        
-        SoftwareRenderer renderer = new SoftwareRenderer(MeshResources.LIGHTMAP_SIZE, MeshResources.LIGHTMAP_SIZE);
-        for (MeshData d:Geometries.GARAGE) {
-            SoftwareRenderer.MeshBuilder builder = new SoftwareRenderer.MeshBuilder();
-            for (int i = 0; i < d.getIndices().length; i++) {
-                int v = d.getIndices()[i];
-                
-                float tu = d.getVertices()[(v * MeshData.SIZE) + MeshData.L_UV_OFFSET + 0];
-                float tv = d.getVertices()[(v * MeshData.SIZE) + MeshData.L_UV_OFFSET + 1];
-                
-                builder.vertex(builder.position((tu - 0.5f) * 2f, (tv - 0.5f) * 2f, 0f), 0, 0, 0);
-            }
-            renderer.setMesh(builder.vertices());
-            
-            renderer.clearBuffers();
-            renderer.render();
-            try {
-                ImageIO.write(SoftwareRenderer.textureToImage(renderer.colorBuffer()), "PNG", new File(d.getName()+".png"));
-            } catch (IOException ex) {
-                throw new UncheckedIOException(ex);
-            }
-        }
     }
 
     public void loop() {
