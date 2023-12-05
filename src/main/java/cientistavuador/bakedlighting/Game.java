@@ -32,21 +32,16 @@ import cientistavuador.bakedlighting.geometry.Geometries;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.resources.mesh.MeshResources;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
-import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.SoftwareRenderer;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.FloatBuffer;
 import javax.imageio.ImageIO;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
-import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.openal.AL11.*;
 import static org.lwjgl.opengl.GL33C.*;
-import org.lwjgl.system.MemoryStack;
 
 /**
  *

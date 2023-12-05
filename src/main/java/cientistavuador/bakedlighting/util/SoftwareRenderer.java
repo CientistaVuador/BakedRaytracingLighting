@@ -1170,7 +1170,7 @@ public class SoftwareRenderer {
                 int maxYP = clamp((int) Math.ceil(maxY), 0, height);
                 int minXP = clamp((int) Math.floor(minX), 0, width - 1);
                 int minYP = clamp((int) Math.floor(minY), 0, height - 1);
-
+                
                 boolean multithreadActivated = (maxXP - minXP) >= 32 && this.renderer.isMultithreadEnabled();
 
                 Future<?>[] tasks = new Future<?>[maxYP - minYP];

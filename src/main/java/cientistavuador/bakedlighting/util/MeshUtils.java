@@ -45,9 +45,9 @@ import javax.imageio.ImageIO;
  * @author Cien
  */
 public class MeshUtils {
-    
-    public static final float PRECISION_FIX = 1f/5000f;
-    
+
+    public static final float PRECISION_FIX = 1f / 500f;
+
     public static void generateTangent(float[] vertices, int vertexSize, int xyzOffset, int uvOffset, int outTangentXYZOffset) {
         if (vertices.length % vertexSize != 0) {
             throw new IllegalArgumentException("Wrong size.");
@@ -214,12 +214,16 @@ public class MeshUtils {
 
         float area;
         float size;
-        int triangleVertex;
+        int v0;
+        int v1;
+        int v2;
 
-        public TriangleQuad(float area, int triangleVertex) {
+        public TriangleQuad(float area, int v0, int v1, int v2) {
             this.area = area;
             this.size = (float) Math.sqrt(area);
-            this.triangleVertex = triangleVertex;
+            this.v0 = v0;
+            this.v1 = v1;
+            this.v2 = v2;
         }
 
     }
@@ -268,7 +272,23 @@ public class MeshUtils {
             float sp = (a + b + c) * 0.5f;
             float area = (float) Math.sqrt(sp * (sp - a) * (sp - b) * (sp - c));
 
-            TriangleQuad quad = new TriangleQuad(area, v0);
+            int va = v2;
+            int vb = v0;
+            int vc = v1;
+            float largerSide = a;
+            if (b > largerSide) {
+                largerSide = b;
+                va = v0;
+                vb = v1;
+                vc = v2;
+            }
+            if (c > largerSide) {
+                va = v1;
+                vb = v2;
+                vc = v0;
+            }
+
+            TriangleQuad quad = new TriangleQuad(area, va, vb, vc);
             quads[(v0 / vertexSize) / 3] = quad;
         }
         Arrays.sort(quads, comparator);
@@ -297,12 +317,12 @@ public class MeshUtils {
                         break;
                     }
                 }
-                
+
                 TriangleQuad quad = queue.poll();
-                
+
                 float maxX = (x + (quad.size - 1f)) + 0.5f;
                 float maxY = (y + (quad.size - 1f)) + 0.5f;
-                
+
                 boolean enoughSpace = true;
                 if (maxX >= lightmapSize || maxY >= lightmapSize) {
                     enoughSpace = false;
@@ -321,19 +341,90 @@ public class MeshUtils {
                     refusedQuads.add(quad);
                     break fitQuad;
                 }
-                
-                int v0 = quad.triangleVertex;
-                int v1 = quad.triangleVertex + vertexSize;
-                int v2 = quad.triangleVertex + (vertexSize * 2);
-                
-                vertices[v0 + outLightmapUV + 0] = (x + 0.5f - PRECISION_FIX) / lightmapSize;
-                vertices[v0 + outLightmapUV + 1] = (y + 0.5f - PRECISION_FIX) / lightmapSize;
 
-                vertices[v1 + outLightmapUV + 0] = ((x + (quad.size - 1f)) + 0.5f + PRECISION_FIX) / lightmapSize;
-                vertices[v1 + outLightmapUV + 1] = (y + 0.5f - PRECISION_FIX) / lightmapSize;
+                int v0 = quad.v0;
+                int v1 = quad.v1;
+                int v2 = quad.v2;
 
-                vertices[v2 + outLightmapUV + 0] = (x + 0.5f - PRECISION_FIX) / lightmapSize;
-                vertices[v2 + outLightmapUV + 1] = ((y + (quad.size - 1f)) + 0.5f + PRECISION_FIX) / lightmapSize;
+                float v0u = x + 0.5f;
+                float v0v = y + 0.5f;
+
+                float v1u = x + (quad.size - 1f) + 0.5f;
+                float v1v = y + 0.5f;
+
+                float v2u = x + 0.5f;
+                float v2v = y + (quad.size - 1f) + 0.5f;
+
+                calculatePrecisionOffset:
+                {
+                    float v0v1u = v0u - v1u;
+                    float v0v1v = v0v - v1v;
+                    float v0v2u = v0u - v2u;
+                    float v0v2v = v0v - v2v;
+
+                    float v1v0u = v1u - v0u;
+                    float v1v0v = v1v - v0v;
+                    float v1v2u = v1u - v2u;
+                    float v1v2v = v1v - v2v;
+
+                    float v2v0u = v2u - v0u;
+                    float v2v0v = v2v - v0v;
+                    float v2v1u = v2u - v1u;
+                    float v2v1v = v2v - v1v;
+
+                    float v0v1s = (float) (1.0 / Math.sqrt((v0v1u * v0v1u) + (v0v1v * v0v1v)));
+                    float v0v2s = (float) (1.0 / Math.sqrt((v0v2u * v0v2u) + (v0v2v * v0v2v)));
+
+                    float v1v0s = (float) (1.0 / Math.sqrt((v1v0u * v1v0u) + (v1v0v * v1v0v)));
+                    float v1v2s = (float) (1.0 / Math.sqrt((v1v2u * v1v2u) + (v1v2v * v1v2v)));
+
+                    float v2v0s = (float) (1.0 / Math.sqrt((v2v0u * v2v0u) + (v2v0v * v2v0v)));
+                    float v2v1s = (float) (1.0 / Math.sqrt((v2v1u * v2v1u) + (v2v1v * v2v1v)));
+
+                    v0v1u *= v0v1s;
+                    v0v1v *= v0v1s;
+                    v0v2u *= v0v2s;
+                    v0v2v *= v0v2s;
+
+                    v1v0u *= v1v0s;
+                    v1v0v *= v1v0s;
+                    v1v2u *= v1v2s;
+                    v1v2v *= v1v2s;
+
+                    v2v0u *= v2v0s;
+                    v2v0v *= v2v0s;
+                    v2v1u *= v2v1s;
+                    v2v1v *= v2v1s;
+
+                    v0u += (v0v1u * PRECISION_FIX) + (v0v2u * PRECISION_FIX);
+                    v0v += (v0v1v * PRECISION_FIX) + (v0v2v * PRECISION_FIX);
+
+                    v1u += (v1v0u * PRECISION_FIX) + (v1v2u * PRECISION_FIX);
+                    v1v += (v1v0v * PRECISION_FIX) + (v1v2v * PRECISION_FIX);
+
+                    v2u += (v2v0u * PRECISION_FIX) + (v2v1u * PRECISION_FIX);
+                    v2v += (v2v0v * PRECISION_FIX) + (v2v1v * PRECISION_FIX);
+                }
+
+                float invLightmapSize = 1f / lightmapSize;
+
+                v0u *= invLightmapSize;
+                v0v *= invLightmapSize;
+
+                v1u *= invLightmapSize;
+                v1v *= invLightmapSize;
+
+                v2u *= invLightmapSize;
+                v2v *= invLightmapSize;
+
+                vertices[v0 + outLightmapUV + 0] = v0u;
+                vertices[v0 + outLightmapUV + 1] = v0v;
+
+                vertices[v1 + outLightmapUV + 0] = v1u;
+                vertices[v1 + outLightmapUV + 1] = v1v;
+
+                vertices[v2 + outLightmapUV + 0] = v2u;
+                vertices[v2 + outLightmapUV + 1] = v2v;
 
                 for (int i = 0; i < (int) quad.area; i++) {
                     int qX = (i % (int) quad.size) + x;
@@ -357,11 +448,12 @@ public class MeshUtils {
                         q.area = q.size * q.size;
                     }
                 }
-                
+
                 refusedQuads.sort(comparator);
                 queue.addAll(refusedQuads);
                 refusedQuads.clear();
             }
+
         }
     }
 
