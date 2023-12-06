@@ -33,7 +33,6 @@ import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
-import cientistavuador.bakedlighting.util.RasterUtils;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.opengl.GL33C.*;
