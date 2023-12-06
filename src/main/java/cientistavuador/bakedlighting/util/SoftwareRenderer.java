@@ -67,75 +67,6 @@ public class SoftwareRenderer {
     private static final int B = 14;
     private static final int A = 15;
 
-    //texture
-    public static interface Texture {
-
-        public int width();
-
-        public int height();
-
-        public default void sampleNearest(float x, float y, float[] result, int offset) {
-            int width = width();
-            int height = height();
-            int pX = (((int) Math.floor(Math.abs(x) * width)) % width);
-            int pY = (((int) Math.floor(Math.abs(y) * height)) % height);
-            fetch(pX, pY, result, offset);
-        }
-
-        public default void sampleBilinear(float x, float y, float[] result, int offset) {
-            int width = width();
-            int height = height();
-
-            float pX = Math.abs((x * width) - 0.5f);
-            float pY = Math.abs((y * height) - 0.5f);
-
-            int bottomLeftX = (int) Math.floor(pX);
-            int bottomLeftY = (int) Math.floor(pY);
-
-            float weightX = pX - bottomLeftX;
-            float weightY = pY - bottomLeftY;
-
-            fetch(bottomLeftX % width, bottomLeftY % height, result, offset);
-            float bottomLeftR = result[offset + 0];
-            float bottomLeftG = result[offset + 1];
-            float bottomLeftB = result[offset + 2];
-            float bottomLeftA = result[offset + 3];
-
-            int bottomRightX = (int) Math.ceil(pX);
-            int bottomRightY = (int) Math.floor(pY);
-
-            fetch(bottomRightX % width, bottomRightY % height, result, offset);
-            float bottomRightR = result[offset + 0];
-            float bottomRightG = result[offset + 1];
-            float bottomRightB = result[offset + 2];
-            float bottomRightA = result[offset + 3];
-
-            int topLeftX = (int) Math.floor(pX);
-            int topLeftY = (int) Math.ceil(pY);
-
-            fetch(topLeftX % width, topLeftY % height, result, offset);
-            float topLeftR = result[offset + 0];
-            float topLeftG = result[offset + 1];
-            float topLeftB = result[offset + 2];
-            float topLeftA = result[offset + 3];
-
-            int topRightX = (int) Math.ceil(pX);
-            int topRightY = (int) Math.ceil(pY);
-
-            fetch(topRightX % width, topRightY % height, result, offset);
-            float topRightR = result[offset + 0];
-            float topRightG = result[offset + 1];
-            float topRightB = result[offset + 2];
-            float topRightA = result[offset + 3];
-
-            result[offset + 0] = (bottomLeftR * (1f - weightX) * (1f - weightY)) + (bottomRightR * weightX * (1f - weightY)) + (topLeftR * (1f - weightX) * weightY) + (topRightR * weightX * weightY);
-            result[offset + 1] = (bottomLeftG * (1f - weightX) * (1f - weightY)) + (bottomRightG * weightX * (1f - weightY)) + (topLeftG * (1f - weightX) * weightY) + (topRightG * weightX * weightY);
-            result[offset + 2] = (bottomLeftB * (1f - weightX) * (1f - weightY)) + (bottomRightB * weightX * (1f - weightY)) + (topLeftB * (1f - weightX) * weightY) + (topRightB * weightX * weightY);
-            result[offset + 3] = (bottomLeftA * (1f - weightX) * (1f - weightY)) + (bottomRightA * weightX * (1f - weightY)) + (topLeftA * (1f - weightX) * weightY) + (topRightA * weightX * weightY);
-        }
-
-        public void fetch(int x, int y, float[] result, int offset);
-    }
 
     //surface
     public class Surface {
@@ -149,15 +80,15 @@ public class SoftwareRenderer {
         private final float[] colorBuffer;
         private final float[] depthBuffer;
 
-        private final Texture colorBufferTexture;
-        private final Texture depthBufferTexture;
+        private final SoftwareTexture colorBufferTexture;
+        private final SoftwareTexture depthBufferTexture;
 
         public Surface(int width, int height) {
             this.width = width;
             this.height = height;
             this.colorBuffer = new float[width * height * 4];
             this.depthBuffer = new float[width * height];
-            this.colorBufferTexture = new Texture() {
+            this.colorBufferTexture = new SoftwareTexture() {
                 @Override
                 public int width() {
                     return Surface.this.width;
@@ -176,7 +107,7 @@ public class SoftwareRenderer {
                     result[offset + 3] = Surface.this.colorBuffer[((x + (y * width())) * 4) + 3];
                 }
             };
-            this.depthBufferTexture = new Texture() {
+            this.depthBufferTexture = new SoftwareTexture() {
                 @Override
                 public int width() {
                     return Surface.this.width;
@@ -210,11 +141,11 @@ public class SoftwareRenderer {
             return height;
         }
 
-        public Texture getColorBufferTexture() {
+        public SoftwareTexture getColorBufferTexture() {
             return colorBufferTexture;
         }
 
-        public Texture getDepthBufferTexture() {
+        public SoftwareTexture getDepthBufferTexture() {
             return depthBufferTexture;
         }
 
@@ -273,9 +204,9 @@ public class SoftwareRenderer {
     }
 
     //awt interop
-    public static Texture wrapImageToTexture(BufferedImage image) {
-        return new Texture() {
-            private final BufferedImage wrapped = image;
+    public static SoftwareTexture wrapImageToTexture(BufferedImage image) {
+        return new SoftwareTexture() {
+            final BufferedImage wrapped = image;
 
             @Override
             public int width() {
@@ -298,7 +229,7 @@ public class SoftwareRenderer {
         };
     }
 
-    public static Texture imageTo16BitsTexture(BufferedImage image) {
+    public static SoftwareTexture imageTo16BitsTexture(BufferedImage image) {
         final int width = image.getWidth();
         final int height = image.getHeight();
         final int[] bufferedData = image.getRGB(0, 0, width, height, null, 0, width);
@@ -315,7 +246,7 @@ public class SoftwareRenderer {
             pixelData[i] = (short) ((rBits << 12) | (gBits << 8) | (bBits << 4) | (aBits << 0));
         }
 
-        return new Texture() {
+        return new SoftwareTexture() {
             @Override
             public int width() {
                 return width;
@@ -341,7 +272,7 @@ public class SoftwareRenderer {
         };
     }
 
-    public static Texture imageTo256ColorsTexture(BufferedImage image) {
+    public static SoftwareTexture imageTo256ColorsTexture(BufferedImage image) {
         final int width = image.getWidth();
         final int height = image.getHeight();
         final int[] bufferedData = image.getRGB(0, 0, width, height, null, 0, width);
@@ -368,7 +299,7 @@ public class SoftwareRenderer {
             pixelData[i] = (byte) ((rBits << 5) | (gBits << 2) | (bBits << 0));
         }
 
-        return new Texture() {
+        return new SoftwareTexture() {
             @Override
             public int width() {
                 return width;
@@ -394,7 +325,7 @@ public class SoftwareRenderer {
         };
     }
 
-    public static Texture imageToTexture(BufferedImage image) {
+    public static SoftwareTexture imageToTexture(BufferedImage image) {
         final int width = image.getWidth();
         final int height = image.getHeight();
         final int[] bufferedData = image.getRGB(0, 0, width, height, null, 0, width);
@@ -412,7 +343,7 @@ public class SoftwareRenderer {
             pixelData[((x + (y * width)) * 4) + 3] = ((pixel >> 24) & 0xFF) / 255f;
         }
 
-        return new Texture() {
+        return new SoftwareTexture() {
             @Override
             public int width() {
                 return width;
@@ -430,7 +361,7 @@ public class SoftwareRenderer {
         };
     }
 
-    public static BufferedImage textureToImage(Texture t) {
+    public static BufferedImage textureToImage(SoftwareTexture t) {
         if (t == null) {
             throw new NullPointerException("Texture is null.");
         }
@@ -1250,7 +1181,7 @@ public class SoftwareRenderer {
                 cb *= ((wv0 * this.vertices[v0 + B]) + (wv1 * this.vertices[v1 + B]) + (wv2 * this.vertices[v2 + B])) * w;
                 ca *= ((wv0 * this.vertices[v0 + A]) + (wv1 * this.vertices[v1 + A]) + (wv2 * this.vertices[v2 + A])) * w;
 
-                Texture texture = this.renderer.getTexture();
+                SoftwareTexture texture = this.renderer.getTexture();
                 if (texture != null) {
                     if (this.renderer.isBilinearFilteringEnabled()) {
                         texture.sampleBilinear(u, v, textureColor, 0);
@@ -1392,7 +1323,7 @@ public class SoftwareRenderer {
     //object state
     private float[] vertices = null;
     private final Matrix4f model = new Matrix4f();
-    private Texture texture = null;
+    private SoftwareTexture texture = null;
     private final Vector4f color = new Vector4f(1f, 1f, 1f, 1f);
 
     public SoftwareRenderer(int width, int height) {
@@ -1447,11 +1378,11 @@ public class SoftwareRenderer {
         return this.frontSurface.getHeight();
     }
 
-    public Texture colorBuffer() {
+    public SoftwareTexture colorBuffer() {
         return this.frontSurface.getColorBufferTexture();
     }
 
-    public Texture depthBuffer() {
+    public SoftwareTexture depthBuffer() {
         return this.frontSurface.getDepthBufferTexture();
     }
 
@@ -1539,11 +1470,11 @@ public class SoftwareRenderer {
     }
 
     //rasterizer
-    public void setTexture(Texture texture) {
+    public void setTexture(SoftwareTexture texture) {
         this.texture = texture;
     }
 
-    public Texture getTexture() {
+    public SoftwareTexture getTexture() {
         return texture;
     }
 
