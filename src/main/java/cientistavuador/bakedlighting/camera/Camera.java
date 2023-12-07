@@ -80,5 +80,11 @@ public interface Camera {
     void setPosition(Vector3dc position);
 
     void setUBO(CameraUBO ubo);
-
+    
+    default void updateUBO() {
+        CameraUBO u = getUBO();
+        if (u != null) {
+            u.updateUBO();
+        }
+    }
 }

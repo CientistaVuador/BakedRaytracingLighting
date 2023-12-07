@@ -36,6 +36,10 @@ import org.joml.Vector3fc;
  */
 public class IntersectionUtils {
 
+    private static final Vector3fc V_100 = new Vector3f(1f, 0f, 0f);
+    private static final Vector3fc V_010 = new Vector3f(0f, 1f, 0f);
+    private static final Vector3fc V_001 = new Vector3f(0f, 0f, 1f);
+
     public static boolean testRayAab(Vector3fc origin, Vector3fc dir, Vector3fc min, Vector3fc max) {
         return Intersectionf.testRayAab(origin, dir, min, max);
     }
@@ -47,166 +51,86 @@ public class IntersectionUtils {
     private static final ThreadLocal<Vector3f[]> threadLocalVectors = new ThreadLocal<>() {
         @Override
         protected Vector3f[] initialValue() {
-            Vector3f[] vectors = new Vector3f[16];
+            Vector3f[] vectors = new Vector3f[24];
             for (int i = 0; i < vectors.length; i++) {
                 vectors[i] = new Vector3f();
             }
             return vectors;
         }
     };
-    
+
     //https://gist.github.com/zvonicek/fe73ba9903f49d57314cf7e8e0f05dcf
     public static boolean testTriangleAab(Vector3fc a, Vector3fc b, Vector3fc c, Vector3fc min, Vector3fc max) {
         Vector3f[] vectors = threadLocalVectors.get();
         int index = 0;
-        
-        Vector3f box_center = min.lerp(max, 0.5f, vectors[index++]);
 
-        float width = Math.abs(max.x() - min.x());
-        float height = Math.abs(max.y() - min.y());
-        float depth = Math.abs(max.z() - min.z());
+        Vector3f aabbCentre = vectors[index++].set(
+                min.x() * 0.5f + max.x() * 0.5f,
+                min.y() * 0.5f + max.y() * 0.5f,
+                min.z() * 0.5f + max.z() * 0.5f
+        );
+        Vector3f aabbExtents = vectors[index++].set(
+                Math.abs(max.x() - min.x()),
+                Math.abs(max.y() - min.y()),
+                Math.abs(max.z() - min.z())
+        );
 
-        Vector3f box_extents = vectors[index++]
-                .set(width, height, depth)
-                .mul(0.5f);
+        Vector3f v0 = vectors[index++].set(a).sub(aabbCentre);
+        Vector3f v1 = vectors[index++].set(b).sub(aabbCentre);
+        Vector3f v2 = vectors[index++].set(c).sub(aabbCentre);
 
-        Vector3f v0 = a.sub(box_center, vectors[index++]);
-        Vector3f v1 = b.sub(box_center, vectors[index++]);
-        Vector3f v2 = c.sub(box_center, vectors[index++]);
+        Vector3f ab = vectors[index++].set(v1).sub(v0).normalize();
+        Vector3f bc = vectors[index++].set(v2).sub(v1).normalize();
+        Vector3f ca = vectors[index++].set(v0).sub(v2).normalize();
 
-        // Compute edge vectors for triangle
-        Vector3f f0 = b.sub(a, vectors[index++]);
-        Vector3f f1 = c.sub(b, vectors[index++]);
-        Vector3f f2 = a.sub(c, vectors[index++]);
+        //Cross ab, bc, and ca with (1, 0, 0)
+        Vector3f a00 = vectors[index++].set(0.0f, -ab.z(), ab.y());
+        Vector3f a01 = vectors[index++].set(0.0f, -bc.z(), bc.y());
+        Vector3f a02 = vectors[index++].set(0.0f, -ca.z(), ca.y());
 
-        Vector3f axis = vectors[index++];
+        //Cross ab, bc, and ca with (0, 1, 0)
+        Vector3f a10 = vectors[index++].set(ab.z(), 0.0f, -ab.x());
+        Vector3f a11 = vectors[index++].set(bc.z(), 0.0f, -bc.x());
+        Vector3f a12 = vectors[index++].set(ca.z(), 0.0f, -ca.x());
 
-        //// region Test axes a00..a22 (category 3)
-        // Test axis a00
-        Vector3f a00 = axis.set(0, -f0.z(), f0.y());
-        float p0 = v0.dot(a00);
-        float p1 = v1.dot(a00);
-        float p2 = v2.dot(a00);
-        float r = box_extents.y() * Math.abs(f0.z()) + box_extents.z() * Math.abs(f0.y());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
+        //Cross ab, bc, and ca with (0, 0, 1)
+        Vector3f a20 = vectors[index++].set(-ab.y(), ab.x(), 0.0f);
+        Vector3f a21 = vectors[index++].set(-bc.y(), bc.x(), 0.0f);
+        Vector3f a22 = vectors[index++].set(-ca.y(), ca.x(), 0.0f);
+
+        if (!AABB_Tri_SAT(v0, v1, v2, aabbExtents, a00)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a01)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a02)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a10)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a11)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a12)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a20)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a21)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, a22)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, V_100)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, V_010)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, V_001)
+                || !AABB_Tri_SAT(v0, v1, v2, aabbExtents, ab.cross(bc, vectors[index++]))) {
             return false;
         }
-
-        // Test axis a01
-        Vector3f a01 = axis.set(0, -f1.z(), f1.y());
-        p0 = v0.dot(a01);
-        p1 = v1.dot(a01);
-        p2 = v2.dot(a01);
-        r = box_extents.y() * Math.abs(f1.z()) + box_extents.z() * Math.abs(f1.y());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a02
-        Vector3f a02 = axis.set(0, -f2.z(), f2.y());
-        p0 = v0.dot(a02);
-        p1 = v1.dot(a02);
-        p2 = v2.dot(a02);
-        r = box_extents.y() * Math.abs(f2.z()) + box_extents.z() * Math.abs(f2.y());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a10
-        Vector3f a10 = axis.set(f0.z(), 0, -f0.x());
-        p0 = v0.dot(a10);
-        p1 = v1.dot(a10);
-        p2 = v2.dot(a10);
-        r = box_extents.x() * Math.abs(f0.z()) + box_extents.z() * Math.abs(f0.x());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a11
-        Vector3f a11 = axis.set(f1.z(), 0, -f1.x());
-        p0 = v0.dot(a11);
-        p1 = v1.dot(a11);
-        p2 = v2.dot(a11);
-        r = box_extents.x() * Math.abs(f1.z()) + box_extents.z() * Math.abs(f1.x());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a12
-        Vector3f a12 = axis.set(f2.z(), 0, -f2.x());
-        p0 = v0.dot(a12);
-        p1 = v1.dot(a12);
-        p2 = v2.dot(a12);
-        r = box_extents.x() * Math.abs(f2.z()) + box_extents.z() * Math.abs(f2.x());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a20
-        Vector3f a20 = axis.set(-f0.y(), f0.x(), 0);
-        p0 = v0.dot(a20);
-        p1 = v1.dot(a20);
-        p2 = v2.dot(a20);
-        r = box_extents.x() * Math.abs(f0.y()) + box_extents.y() * Math.abs(f0.x());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a21
-        Vector3f a21 = axis.set(-f1.y(), f1.x(), 0);
-        p0 = v0.dot(a21);
-        p1 = v1.dot(a21);
-        p2 = v2.dot(a21);
-        r = box_extents.x() * Math.abs(f1.y()) + box_extents.y() * Math.abs(f1.x());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        // Test axis a22
-        Vector3f a22 = axis.set(-f2.y(), f2.x(), 0);
-        p0 = v0.dot(a22);
-        p1 = v1.dot(a22);
-        p2 = v2.dot(a22);
-        r = box_extents.x() * Math.abs(f2.y()) + box_extents.y() * Math.abs(f2.x());
-        if (Math.max(-max(p0, p1, p2), min(p0, p1, p2)) > r) {
-            return false;
-        }
-
-        //// endregion
-        //// region Test the three axes corresponding to the face normals of AABB b (category 1)
-        // Exit if...
-        // ... [-extents.X, extents.X] and [Min(v0.X,v1.X,v2.X), Max(v0.X,v1.X,v2.X)] do not overlap
-        if (max(v0.x(), v1.x(), v2.x()) < -box_extents.x() || min(v0.x(), v1.x(), v2.x()) > box_extents.x()) {
-            return false;
-        }
-
-        // ... [-extents.Y, extents.Y] and [Min(v0.Y,v1.Y,v2.Y), Max(v0.Y,v1.Y,v2.Y)] do not overlap
-        if (max(v0.y(), v1.y(), v2.y()) < -box_extents.y() || min(v0.y(), v1.y(), v2.y()) > box_extents.y()) {
-            return false;
-        }
-
-        // ... [-extents.Z, extents.Z] and [Min(v0.Z,v1.Z,v2.Z), Max(v0.Z,v1.Z,v2.Z)] do not overlap
-        if (max(v0.z(), v1.z(), v2.z()) < -box_extents.z() || min(v0.z(), v1.z(), v2.z()) > box_extents.z()) {
-            return false;
-        }
-
-        //// endregion
-        //// region Test separating axis corresponding to triangle face normal (category 2)
-        Vector3f plane_normal = f0.cross(f1, vectors[index++]);
-        float plane_distance = Math.abs(plane_normal.dot(v0));
-
-        // Compute the projection interval radius of b onto L(t) = b.c + t * p.n
-        r = box_extents.x() * Math.abs(plane_normal.x()) + box_extents.y() * Math.abs(plane_normal.y()) + box_extents.z() * Math.abs(plane_normal.z());
-
-        // Intersection occurs when plane distance falls within [-r,+r] interval
-        if (plane_distance > r) {
-            return false;
-        }
-
-        //// endregion
         return true;
     }
-    
+
+    private static boolean AABB_Tri_SAT(Vector3f v0, Vector3fc v1, Vector3fc v2, Vector3fc aabbExtents, Vector3fc axis) {
+        float p0 = v0.dot(axis);
+        float p1 = v1.dot(axis);
+        float p2 = v2.dot(axis);
+
+        float r = aabbExtents.x() * Math.abs(V_100.dot(axis))
+                + aabbExtents.y() * Math.abs(V_010.dot(axis))
+                + aabbExtents.z() * Math.abs(V_001.dot(axis));
+
+        float maxP = Math.max(p0, Math.max(p1, p2));
+        float minP = Math.min(p0, Math.min(p1, p2));
+
+        return !(Math.max(-maxP, minP) > r);
+    }
+
     private static float min(float a, float b, float c) {
         return Math.min(Math.min(a, b), c);
     }
