@@ -28,21 +28,15 @@ package cientistavuador.bakedlighting;
 
 import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
+import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
-import cientistavuador.bakedlighting.resources.mesh.MeshData;
+import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
-import cientistavuador.bakedlighting.util.BVH;
-import cientistavuador.bakedlighting.util.IntersectionUtils;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Queue;
+import cientistavuador.bakedlighting.util.bakedraytracing.BakedTest;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
-import org.joml.Vector3fc;
-import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
@@ -58,12 +52,10 @@ public class Game {
     }
 
     private final FreeCamera camera = new FreeCamera();
-
-    private final BVH bricks = BVH.create(Geometries.GARAGE[1]);
-    private final List<BVH> bvhList = new ArrayList<>();
+    private final Geometry[] geometries = new Geometry[Geometries.GARAGE.length];
     
     private Game() {
-
+        
     }
 
     public void start() {
@@ -80,13 +72,17 @@ public class Game {
         program.setTextureUnit(0);
         program.setLightingEnabled(true);
         glUseProgram(0);
+        
+        for (int i = 0; i < geometries.length; i++) {
+            geometries[i] = new Geometry(Geometries.GARAGE[i]);
+        }
+        
+        for (Geometry g:geometries) {
+            BakedTest.bake(g, geometries, new Vector3f(-1f, -1f, -1f).normalize().negate());
+        }
     }
 
     public void loop() {
-        for (BVH b : bvhList) {
-            b.queueAabRender();
-        }
-
         camera.updateMovement();
         camera.updateUBO();
 
@@ -95,14 +91,21 @@ public class Game {
         GeometryProgram program = GeometryProgram.INSTANCE;
         program.use();
         program.setProjectionView(cameraProjectionView);
-        glActiveTexture(GL_TEXTURE0);
-        for (MeshData e : Geometries.GARAGE) {
-            glBindTexture(GL_TEXTURE_2D, Geometries.GARAGE[1].getTextureHint());
-            Geometries.GARAGE[1].bindRenderUnbind();
+        program.setTextureUnit(0);
+        program.setLightmapTextureUnit(1);
+        program.setLightingEnabled(false);
+        for (int i = 0; i < geometries.length; i++) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, geometries[i].getMesh().getTextureHint());
+            glActiveTexture(GL_TEXTURE1);
+            glBindTexture(GL_TEXTURE_2D, geometries[i].getLightmapTextureHint());
+            program.setModel(geometries[i].getModel());
+            geometries[i].getMesh().bindRenderUnbind();
         }
         glUseProgram(0);
 
         AabRender.renderQueue(camera);
+        LineRender.renderQueue(camera);
 
         Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";
         Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
@@ -117,40 +120,7 @@ public class Game {
     }
 
     public void keyCallback(long window, int key, int scancode, int action, int mods) {
-        if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
-            bvhList.clear();
-            
-            Vector3fc direction = camera.getFront();
-            Vector3fc origin = new Vector3f().set(camera.getPosition());
-
-            Queue<BVH> queue = new ArrayDeque<>();
-            List<BVH> next = new ArrayList<>();
-
-            queue.add(bricks);
-            
-            int indices = 0;
-            
-            do {
-                BVH e;
-                while ((e = queue.poll()) != null) {
-                    if (IntersectionUtils.testRayAab(origin, direction, e.getMin(), e.getMax())) {
-                        if (e.getLeft() == null && e.getRight() == null) {
-                            indices += e.getAmountOfIndices();
-                            bvhList.add(e);
-                            continue;
-                        }
-                        
-                        next.add(e.getLeft());
-                        next.add(e.getRight());
-                    }
-                }
-                queue.addAll(next);
-                next.clear();
-            } while (!queue.isEmpty());
-            
-            System.out.println(bvhList.size());
-            System.out.println(indices);
-        }
+        
     }
 
     public void mouseCallback(long window, int button, int action, int mods) {

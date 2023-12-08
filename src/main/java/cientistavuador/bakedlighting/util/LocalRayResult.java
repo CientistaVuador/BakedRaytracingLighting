@@ -24,49 +24,55 @@
  *
  * For more information, please refer to <https://unlicense.org>
  */
-package cientistavuador.bakedlighting.texture;
+package cientistavuador.bakedlighting.util;
 
-import static org.lwjgl.opengl.GL33C.*;
+import org.joml.Vector3f;
+import org.joml.Vector3fc;
 
 /**
  *
  * @author Cien
  */
-public class Textures {
+public class LocalRayResult {
     
-    public static final int EMPTY_TEXTURE;
-    
-    static {
-        EMPTY_TEXTURE = glGenTextures();
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, EMPTY_TEXTURE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, new float[] {1f, 1f, 1f, 1f});
-        glBindTexture(GL_TEXTURE_2D, 0);
+    private final Vector3f localOrigin = new Vector3f();
+    private final Vector3f localDirection = new Vector3f();
+    private final Vector3f localHitpoint = new Vector3f();
+    private final int i0;
+    private final int i1;
+    private final int i2;
+
+    public LocalRayResult(Vector3fc localOrigin, Vector3fc localDirection, Vector3fc localHitpoint, int index0, int index1, int index2) {
+        this.localOrigin.set(localOrigin);
+        this.localDirection.set(localDirection);
+        this.localHitpoint.set(localHitpoint);
+        this.i0 = index0;
+        this.i1 = index1;
+        this.i2 = index2;
+    }
+
+    public Vector3fc getLocalOrigin() {
+        return localOrigin;
+    }
+
+    public Vector3fc getLocalDirection() {
+        return localDirection;
+    }
+
+    public Vector3fc getLocalHitpoint() {
+        return localHitpoint;
     }
     
-    public static final int BRICKS;
-    public static final int CONCRETE;
-    public static final int GRASS;
-    public static final int RED;
-    
-    static {
-        int[] textures = TexturesLoader.load(
-                "bricks.png",
-                "concrete.png",
-                "grass.png",
-                "red.png"
-        );
-        BRICKS = textures[0];
-        CONCRETE = textures[1];
-        GRASS = textures[2];
-        RED = textures[3];
+    public int i0() {
+        return i0;
     }
-    
-    public static void init() {
-        
+
+    public int i1() {
+        return i1;
     }
-    
-    private Textures() {
-        
+
+    public int i2() {
+        return i2;
     }
+
 }

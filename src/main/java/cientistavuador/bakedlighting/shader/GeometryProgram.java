@@ -233,6 +233,7 @@ public class GeometryProgram {
             
             uniform vec4 color;
             uniform sampler2D tex;
+            uniform sampler2D lightmap;
             
             uniform bool lightingEnabled;
             
@@ -256,8 +257,9 @@ public class GeometryProgram {
                 vec3 normal = normalize(linearNormal);
                 vec3 tangent = normalize(linearTangent);
                 
+                vec4 lightmapColor = texture(lightmap, lightmapUv);
                 vec4 textureColor = texture(tex, uv);
-                colorOutput = textureColor * color;
+                colorOutput = textureColor * color * lightmapColor;
                 if (lightingEnabled) {
                     textureColor.rgb = pow(textureColor.rgb * color.rgb, vec3(gamma));
                     vec3 resultOutput = vec3(0.0);
@@ -279,7 +281,7 @@ public class GeometryProgram {
                         }
                     }
                     
-                    colorOutput = vec4(pow(resultOutput, vec3(1.0/gamma)), textureColor.a * color.a);
+                    colorOutput = vec4(pow(resultOutput, vec3(1.0/gamma)) * lightmapColor.rgb, textureColor.a * color.a * lightmapColor.a);
                 }
             }
             """,
@@ -289,14 +291,15 @@ public class GeometryProgram {
     );
     
     private static final BetterUniformSetter UNIFORMS = new BetterUniformSetter(SHADER_PROGRAM);
-    
     public static final GeometryProgram INSTANCE = new GeometryProgram();
+    public static final int EMPTY_LIGHTMAP = glGenTextures();
     
     private final Matrix4f projectionView = new Matrix4f();
     private final Matrix4f model = new Matrix4f();
     private final Matrix3f normalModel = new Matrix3f();
     private final Vector4f color = new Vector4f();
     private int textureUnit = 0;
+    private int lightmapTextureUnit = 0;
     
     private boolean lightingEnabled = false;
     
@@ -352,6 +355,10 @@ public class GeometryProgram {
     public List<PointLight> getLights() {
         return lights;
     }
+
+    public int getLightmapTextureUnit() {
+        return lightmapTextureUnit;
+    }
     
     public void updateLightsUniforms() {
         int uniformsIndex = 0;
@@ -393,7 +400,7 @@ public class GeometryProgram {
         glUniform3f(UNIFORMS.locationOf("sunDirection"), this.sunDirection.x(), this.sunDirection.y(), this.sunDirection.z());
     }
     
-    public void setSunDirection(Vector3f dir) {
+    public void setSunDirection(Vector3fc dir) {
         setSunDirection(dir.x(), dir.y(), dir.z());
     }
     
@@ -402,7 +409,7 @@ public class GeometryProgram {
         glUniform3f(UNIFORMS.locationOf("sunAmbient"), r, g, b);
     }
     
-    public void setSunAmbient(Vector3f ambient) {
+    public void setSunAmbient(Vector3fc ambient) {
         setSunAmbient(ambient.x(), ambient.y(), ambient.z());
     }
     
@@ -411,7 +418,7 @@ public class GeometryProgram {
         glUniform3f(UNIFORMS.locationOf("sunDiffuse"), r, g, b);
     }
     
-    public void setSunDiffuse(Vector3f diffuse) {
+    public void setSunDiffuse(Vector3fc diffuse) {
         setSunDiffuse(diffuse.x(), diffuse.y(), diffuse.z());
     }
 
@@ -420,12 +427,12 @@ public class GeometryProgram {
         glUniform1i(UNIFORMS.locationOf("lightingEnabled"), (lightingEnabled ? 1 : 0));
     }
     
-    public void setProjectionView(Matrix4f projectionView) {
+    public void setProjectionView(Matrix4fc projectionView) {
         this.projectionView.set(projectionView);
         BetterUniformSetter.uniformMatrix4fv(UNIFORMS.locationOf("projectionView"), projectionView);
     }
     
-    public void setModel(Matrix4f model) {
+    public void setModel(Matrix4fc model) {
         this.normalModel.set(this.model.set(model).invert().transpose());
         this.model.set(model);
         
@@ -436,6 +443,11 @@ public class GeometryProgram {
     public void setTextureUnit(int unit) {
         this.textureUnit = unit;
         glUniform1i(UNIFORMS.locationOf("tex"), unit);
+    }
+
+    public void setLightmapTextureUnit(int lightmapTextureUnit) {
+        this.lightmapTextureUnit = lightmapTextureUnit;
+        glUniform1i(UNIFORMS.locationOf("lightmap"), lightmapTextureUnit);
     }
     
     public void setColor(float r, float g, float b, float a) {

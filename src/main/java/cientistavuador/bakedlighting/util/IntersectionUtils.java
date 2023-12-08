@@ -45,7 +45,7 @@ public class IntersectionUtils {
     }
 
     public static float intersectRayTriangle(Vector3fc origin, Vector3fc dir, Vector3fc a, Vector3fc b, Vector3fc c) {
-        return Intersectionf.intersectRayTriangleFront(origin, dir, a, b, c, 1f / 10000f);
+        return Intersectionf.intersectRayTriangle(origin, dir, a, b, c, 1f / 10000f);
     }
 
     private static final ThreadLocal<Vector3f[]> threadLocalVectors = new ThreadLocal<>() {

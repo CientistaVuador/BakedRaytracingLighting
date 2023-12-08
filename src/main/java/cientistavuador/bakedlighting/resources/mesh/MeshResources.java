@@ -46,7 +46,7 @@ import java.util.zip.GZIPInputStream;
  */
 public class MeshResources {
     
-    public static int LIGHTMAP_SIZE = 256;
+    public static int LIGHTMAP_SIZE = 128;
     
     public static MeshData[] load(String name) {
         try {

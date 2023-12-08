@@ -27,7 +27,9 @@
 package cientistavuador.bakedlighting.util;
 
 import java.nio.FloatBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.joml.Matrix3fc;
 import org.joml.Matrix4fc;
@@ -58,17 +60,17 @@ public class BetterUniformSetter {
     }
     
     private final int program;
-    private final String[] uniforms;
+    private final List<String> uniforms = new ArrayList<>();
     private final Map<String, Integer> locations = new HashMap<>();
     
     public BetterUniformSetter(int program) {
         this.program = program;
         
-        this.uniforms = new String[glGetProgrami(program, GL_ACTIVE_UNIFORMS)];
-        for (int i = 0; i < this.uniforms.length; i++) {
+        int uniformsLength = glGetProgrami(program, GL_ACTIVE_UNIFORMS);
+        for (int i = 0; i < uniformsLength; i++) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 String uniform = glGetActiveUniform(program, i, stack.callocInt(1), stack.callocInt(1));
-                this.uniforms[i] = uniform;
+                this.uniforms.add(uniform);
                 this.locations.put(uniform, glGetUniformLocation(program, uniform));
             }
         }
@@ -79,13 +81,16 @@ public class BetterUniformSetter {
     }
 
     public String[] getUniforms() {
-        return uniforms.clone();
+        return uniforms.toArray(String[]::new);
     }
     
     public int locationOf(String uniform) {
         Integer e = this.locations.get(uniform);
         if (e == null) {
-            return -1;
+            int lookup = glGetUniformLocation(this.program, uniform);
+            this.uniforms.add(uniform);
+            this.locations.put(uniform, lookup);
+            return lookup;
         }
         return e;
     }

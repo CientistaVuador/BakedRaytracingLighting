@@ -27,7 +27,12 @@
 package cientistavuador.bakedlighting.resources.mesh;
 
 import cientistavuador.bakedlighting.Main;
+import cientistavuador.bakedlighting.util.BVH;
 import java.util.Arrays;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
@@ -48,6 +53,8 @@ public class MeshData {
     private final String name;
     private final float[] vertices;
     private final int[] indices;
+    private final CompletableFuture<BVH> futureBvh;
+    private BVH bvh = null;
     private int vao = 0;
     private int ebo = 0;
     private int vbo = 0;
@@ -57,6 +64,9 @@ public class MeshData {
         this.name = name;
         this.vertices = vertices;
         this.indices = indices;
+        this.futureBvh = CompletableFuture.supplyAsync(() -> {
+            return BVH.createAlternative(vertices, MeshData.SIZE, MeshData.XYZ_OFFSET, indices);
+        });
     }
 
     public String getName() {
@@ -170,6 +180,17 @@ public class MeshData {
         unbind();
     }
 
+    public BVH getBVH() {
+        if (this.bvh == null) {
+            try {
+                this.bvh = this.futureBvh.get();
+            } catch (InterruptedException | ExecutionException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        return this.bvh;
+    }
+    
     @Override
     public int hashCode() {
         int hash = 7;
