@@ -34,9 +34,12 @@ import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
+import cientistavuador.bakedlighting.util.MeshUtils;
+import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.bakedraytracing.BakedTest;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
@@ -78,7 +81,7 @@ public class Game {
         }
         
         for (Geometry g:geometries) {
-            BakedTest.bake(g, geometries, new Vector3f(-1f, -1f, -1f).normalize().negate());
+            BakedTest.bake(g, geometries, new Vector3f(-1f, -1f, 0.5f).normalize().negate());
         }
     }
 
@@ -120,7 +123,15 @@ public class Game {
     }
 
     public void keyCallback(long window, int key, int scancode, int action, int mods) {
-        
+        if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
+            Vector3f origin = new Vector3f().set(camera.getPosition());
+            Vector3f direction = new Vector3f().set(camera.getFront());
+            
+            RayResult[] result = Geometry.testRay(origin, direction, geometries);
+            for (RayResult r:result) {
+                System.out.println(r);
+            }
+        }
     }
 
     public void mouseCallback(long window, int button, int action, int mods) {

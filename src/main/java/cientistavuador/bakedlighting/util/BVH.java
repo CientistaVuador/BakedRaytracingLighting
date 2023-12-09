@@ -26,7 +26,6 @@
  */
 package cientistavuador.bakedlighting.util;
 
-import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -420,6 +419,10 @@ public class BVH implements Aab {
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
         
+        Vector3f ba = new Vector3f();
+        Vector3f ca = new Vector3f();
+        Vector3f cross = new Vector3f();
+        
         Queue<BVH> queue = new ArrayDeque<>();
         List<BVH> next = new ArrayList<>();
 
@@ -453,8 +456,14 @@ public class BVH implements Aab {
                                 
                                 float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
                                 if (hit > 0f) {
+                                    ba.set(b).sub(a).normalize();
+                                    ca.set(c).sub(a).normalize();
+                                    cross.set(ba).cross(ca).normalize();
+                                    
+                                    boolean frontFace = cross.dot(localDirection) < 0f;
+                                    
                                     hitpoint.set(localDirection).mul(hit).add(localOrigin);
-                                    results.add(new LocalRayResult(localOrigin, localDirection, hitpoint, i0, i1, i2));
+                                    results.add(new LocalRayResult(localOrigin, localDirection, hitpoint, i0, i1, i2, frontFace));
                                 }
                             }
                         }

@@ -31,9 +31,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 
 /**
  *
@@ -150,7 +152,7 @@ public class MeshUtils {
             int indexA = this.vertexIndex;
             int indexB = other.vertexIndex;
             for (int i = 0; i < this.vertexSize; i++) {
-                if (Float.floatToRawIntBits(this.vertices[indexA + i]) != Float.floatToRawIntBits(this.vertices[indexB + i])) {
+                if (this.vertices[indexA + i] != this.vertices[indexB + i]) {
                     return false;
                 }
             }
@@ -267,18 +269,18 @@ public class MeshUtils {
             float sp = (a + b + c) * 0.5f;
             float area = (float) Math.sqrt(sp * (sp - a) * (sp - b) * (sp - c));
 
-            int va = v2;
+            int va  = v2;
             int vb = v0;
             int vc = v1;
             float largerSide = a;
             if (b > largerSide) {
                 largerSide = b;
-                va = v0;
+                va  = v0;
                 vb = v1;
                 vc = v2;
             }
             if (c > largerSide) {
-                va = v1;
+                va  = v1;
                 vb = v2;
                 vc = v0;
             }

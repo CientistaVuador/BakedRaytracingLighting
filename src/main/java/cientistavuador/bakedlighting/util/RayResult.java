@@ -49,7 +49,8 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
                 local.getLocalHitpoint(),
                 local.i0(),
                 local.i1(),
-                local.i2()
+                local.i2(),
+                local.frontFace()
         );
         this.geometry = geometry;
         this.origin.set(local.getLocalOrigin());
@@ -113,7 +114,9 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
                 ","+
                 this.getHitpoint().z()+
                 ";dist:"+
-                this.getDistance()
+                this.getDistance()+
+                ";front:"+
+                this.frontFace()
                 ;
     }
     

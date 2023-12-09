@@ -41,14 +41,16 @@ public class LocalRayResult {
     private final int i0;
     private final int i1;
     private final int i2;
+    private final boolean frontFace;
 
-    public LocalRayResult(Vector3fc localOrigin, Vector3fc localDirection, Vector3fc localHitpoint, int index0, int index1, int index2) {
+    public LocalRayResult(Vector3fc localOrigin, Vector3fc localDirection, Vector3fc localHitpoint, int index0, int index1, int index2, boolean frontFace) {
         this.localOrigin.set(localOrigin);
         this.localDirection.set(localDirection);
         this.localHitpoint.set(localHitpoint);
         this.i0 = index0;
         this.i1 = index1;
         this.i2 = index2;
+        this.frontFace = frontFace;
     }
 
     public Vector3fc getLocalOrigin() {
@@ -62,7 +64,7 @@ public class LocalRayResult {
     public Vector3fc getLocalHitpoint() {
         return localHitpoint;
     }
-    
+
     public int i0() {
         return i0;
     }
@@ -73,6 +75,10 @@ public class LocalRayResult {
 
     public int i2() {
         return i2;
+    }
+
+    public boolean frontFace() {
+        return frontFace;
     }
 
 }
