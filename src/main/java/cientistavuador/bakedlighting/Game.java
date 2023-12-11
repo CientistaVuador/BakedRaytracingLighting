@@ -34,9 +34,9 @@ import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
+import cientistavuador.bakedlighting.util.BakedRaytracing;
 import cientistavuador.bakedlighting.util.MeshUtils;
 import cientistavuador.bakedlighting.util.RayResult;
-import cientistavuador.bakedlighting.util.bakedraytracing.BakedTest;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -80,9 +80,8 @@ public class Game {
             geometries[i] = new Geometry(Geometries.GARAGE[i]);
         }
         
-        for (Geometry g:geometries) {
-            BakedTest.bake(g, geometries, new Vector3f(-1f, -1f, 0.5f).normalize().negate());
-        }
+        BakedRaytracing b = new BakedRaytracing(geometries, 512, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
+        b.bake();
     }
 
     public void loop() {

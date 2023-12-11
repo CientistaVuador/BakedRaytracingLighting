@@ -46,8 +46,6 @@ import java.util.zip.GZIPInputStream;
  */
 public class MeshResources {
     
-    public static int LIGHTMAP_SIZE = 128;
-    
     public static MeshData[] load(String name) {
         try {
             return new MeshResources(name).get();
@@ -332,8 +330,7 @@ public class MeshResources {
                 newVertices,
                 MeshData.SIZE,
                 MeshData.XYZ_OFFSET,
-                MeshData.L_UV_OFFSET,
-                MeshResources.LIGHTMAP_SIZE
+                MeshData.L_UV_OFFSET
         );
         
         Pair<float[], int[]> verticesIndices = MeshUtils.generateIndices(
