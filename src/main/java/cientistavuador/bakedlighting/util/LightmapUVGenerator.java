@@ -28,6 +28,7 @@ package cientistavuador.bakedlighting.util;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +47,8 @@ public class LightmapUVGenerator {
     public static final int BASE_LIGHTMAP_SIZE = 64;
     public static final float PRECISION_FIX = 0.001f;
     public static final int MINIMUM_TRIANGLE_SIZE = 4;
+    public static final float SQUARE_TOLERANCE = 0.15f;
+    public static final float WIDTH_TOLERANCE = 0.10f;
 
     private class Vertex {
 
@@ -87,8 +90,6 @@ public class LightmapUVGenerator {
 
         float x;
         float y;
-        float area;
-        float size;
         boolean topAvailable = true;
         boolean rightAvailable = true;
         int v0;
@@ -101,15 +102,31 @@ public class LightmapUVGenerator {
         float width;
         float height;
         float margin;
+        boolean grouped = false;
+    }
+
+    private class QuadsGroup {
+
+        float width;
+        float height;
+        int level = 0;
+        final List<Quad> quads = new ArrayList<>();
     }
 
     private final float[] vertices;
     private final int vertexSize;
     private final int xyzOffset;
     private final int outUVOffset;
+
     private final Map<Vertex, List<Vertex>> mappedVertices = new HashMap<>();
+
     private final List<Quad> quads = new ArrayList<>();
     private final Set<Integer> processedTriangles = new HashSet<>();
+
+    private final List<QuadsGroup> groupsList = new ArrayList<>();
+
+    private QuadsGroup[] groups = null;
+
     private float totalWidth = 0f;
     private float totalHeight = 0f;
 
@@ -150,53 +167,47 @@ public class LightmapUVGenerator {
         float b = (float) Math.sqrt(Math.pow(v1x - v2x, 2.0) + Math.pow(v1y - v2y, 2.0) + Math.pow(v1z - v2z, 2.0));
         float c = (float) Math.sqrt(Math.pow(v2x - v0x, 2.0) + Math.pow(v2y - v0y, 2.0) + Math.pow(v2z - v0z, 2.0));
 
+        float storeA;
+        float storeC;
+
         int v0 = q.v2;
         int v1 = q.v0;
         int v2 = q.v1;
+        storeA = c;
+        storeC = b;
         float largerSide = a;
         if (b > largerSide) {
             largerSide = b;
             v0 = q.v0;
             v1 = q.v1;
             v2 = q.v2;
+            storeA = a;
+            storeC = c;
         }
         if (c > largerSide) {
             v0 = q.v1;
             v1 = q.v2;
             v2 = q.v0;
+            storeA = b;
+            storeC = a;
         }
 
         q.v0 = v0;
         q.v1 = v1;
         q.v2 = v2;
 
-        float sp = (a + b + c) * 0.5f;
-        float area = (float) Math.sqrt(sp * (sp - a) * (sp - b) * (sp - c));
-
-        q.area = area;
-    }
-
-    private void calculateAreaSecondTriangle(Quad q) {
-        float v0x = vertices[q.sv0 + this.xyzOffset + 0];
-        float v0y = vertices[q.sv0 + this.xyzOffset + 1];
-        float v0z = vertices[q.sv0 + this.xyzOffset + 2];
-
-        float v1x = vertices[q.sv1 + this.xyzOffset + 0];
-        float v1y = vertices[q.sv1 + this.xyzOffset + 1];
-        float v1z = vertices[q.sv1 + this.xyzOffset + 2];
-
-        float v2x = vertices[q.sv2 + this.xyzOffset + 0];
-        float v2y = vertices[q.sv2 + this.xyzOffset + 1];
-        float v2z = vertices[q.sv2 + this.xyzOffset + 2];
-
-        float a = (float) Math.sqrt(Math.pow(v0x - v1x, 2.0) + Math.pow(v0y - v1y, 2.0) + Math.pow(v0z - v1z, 2.0));
-        float b = (float) Math.sqrt(Math.pow(v1x - v2x, 2.0) + Math.pow(v1y - v2y, 2.0) + Math.pow(v1z - v2z, 2.0));
-        float c = (float) Math.sqrt(Math.pow(v2x - v0x, 2.0) + Math.pow(v2y - v0y, 2.0) + Math.pow(v2z - v0z, 2.0));
-
-        float sp = (a + b + c) * 0.5f;
-        float area = (float) Math.sqrt(sp * (sp - a) * (sp - b) * (sp - c));
-
-        q.area += area;
+        q.width = storeA;
+        q.height = storeC;
+        if (q.height > q.width) {
+            int storeV1 = q.v1;
+            int storeV2 = q.v2;
+            q.v1 = storeV2;
+            q.v2 = storeV1;
+            float storeWidth = q.width;
+            float storeHeight = q.height;
+            q.width = storeHeight;
+            q.height = storeWidth;
+        }
     }
 
     private void mapQuads() {
@@ -261,8 +272,6 @@ public class LightmapUVGenerator {
                 q.sv1 = sv1;
                 q.sv2 = sv2;
 
-                calculateAreaSecondTriangle(q);
-
                 this.processedTriangles.add(striangle);
             }
 
@@ -270,97 +279,147 @@ public class LightmapUVGenerator {
         }
     }
 
-    private void calculateQuadAreasAndSort() {
+    private void calculateQuadAreas() {
         float totalArea = 0f;
         for (Quad q : this.quads) {
-            totalArea += q.area;
+            totalArea += (q.width * q.height);
         }
         for (Quad q : this.quads) {
-            q.area = (q.area / totalArea) * (BASE_LIGHTMAP_SIZE * BASE_LIGHTMAP_SIZE);
-            q.size = (float) Math.sqrt(q.area);
+            float area = q.width * q.height;
+            float size = (float) Math.sqrt(area);
+            float aspectWidth = q.width / size;
+            float aspectHeight = q.height / size;
+            area = (area / totalArea) * (BASE_LIGHTMAP_SIZE * BASE_LIGHTMAP_SIZE);
+            size = (float) Math.sqrt(area);
+            q.width = size * aspectWidth;
+            q.height = size * aspectHeight;
         }
+    }
+
+    private boolean isSquare(float width, float height) {
+        float aspect = width / height;
+        return aspect > (1f - SQUARE_TOLERANCE) && aspect < (1f + SQUARE_TOLERANCE);
+    }
+
+    private void groupQuads() {
         Comparator<Quad> comparator = (o1, o2) -> {
-            if (o1.area < o2.area) {
+            if (o1.height > o2.height) {
                 return 1;
             }
-            if (o1.area > o2.area) {
+            if (o1.height < o2.height) {
                 return -1;
             }
             return 0;
         };
-        this.quads.sort(comparator);
-    }
 
-    private boolean testAab(float x, float y, float size, Quad other) {
-        x += PRECISION_FIX;
-        y += PRECISION_FIX;
-        return Intersectionf.testAabAab(
-                x, y, 0f, x + size, y + size, 0f,
-                other.x, other.y, 0f, other.x + other.size, other.y + other.size, 0f
-        );
-    }
-
-    private void connectQuads() {
-        List<Quad> connectedQuads = new ArrayList<>();
-        Queue<Quad> toProcess = new ArrayDeque<>(this.quads);
-        float width = 0f;
-        float height = 0f;
-        boolean rightAxis = true;
-        Quad q;
-        while ((q = toProcess.poll()) != null) {
-            if (connectedQuads.isEmpty()) {
-                q.x = 0f;
-                q.y = 0f;
-                width = q.size;
-                height = q.size;
-                connectedQuads.add(q);
+        for (Quad q : this.quads) {
+            if (q.grouped) {
                 continue;
             }
+            if (isSquare(q.width, q.height)) {
+                QuadsGroup group = new QuadsGroup();
+                group.width = q.width;
+                group.height = q.height;
+                group.level = (int) (Math.floor(Math.log(Math.sqrt(group.width * group.height)) / Math.log(2.0)));
+                group.quads.add(q);
 
-            for (Quad c : connectedQuads) {
-                if (!c.rightAvailable && rightAxis) {
+                this.groupsList.add(group);
+                q.grouped = true;
+                continue;
+            }
+            QuadsGroup group = new QuadsGroup();
+            group.quads.add(q);
+            q.grouped = true;
+
+            float width = q.width;
+            float height = q.height;
+
+            List<Quad> closestWidth = new ArrayList<>();
+            for (Quad e : this.quads) {
+                if (e.grouped) {
                     continue;
                 }
-                if (!c.topAvailable && !rightAxis) {
-                    continue;
-                }
-
-                float x;
-                float y;
-                if (rightAxis) {
-                    x = c.x + c.size;
-                    y = c.y;
-                } else {
-                    x = c.x;
-                    y = c.y + c.size;
-                }
-
-                boolean available = true;
-                for (Quad o : connectedQuads) {
-                    if (testAab(x, y, q.size, o)) {
-                        available = false;
-                        break;
-                    }
-                }
-                if (available) {
-                    q.x = x;
-                    q.y = y;
-                    if (rightAxis) {
-                        c.rightAvailable = false;
-                    } else {
-                        c.topAvailable = false;
-                    }
-                    width = Math.max(width, q.x + q.size);
-                    height = Math.max(height, q.y + q.size);
-                    break;
+                float ratio = width / e.width;
+                if (ratio > (1f - WIDTH_TOLERANCE) && ratio < (1f + WIDTH_TOLERANCE)) {
+                    closestWidth.add(e);
                 }
             }
 
-            rightAxis = height > width;
-            connectedQuads.add(q);
+            closestWidth.sort(comparator);
+
+            for (Quad e : closestWidth) {
+                if ((height + e.height) > width) {
+                    break;
+                }
+                height += e.height;
+                e.grouped = true;
+                group.quads.add(e);
+            }
+
+            group.width = width;
+            group.height = height;
+            group.level = (int) (Math.floor(Math.log(Math.sqrt(group.width * group.height)) / Math.log(2.0)));
+            this.groupsList.add(group);
         }
-        this.totalWidth = width;
-        this.totalHeight = height;
+
+        this.groups = this.groupsList.toArray(QuadsGroup[]::new);
+        Comparator<QuadsGroup> groupComparator = (o1, o2) -> {
+            if (o1.level == o2.level) {
+                float o1Area = o1.width * o1.height;
+                float o2Area = o2.width * o2.height;
+                if (o1Area < o2Area) {
+                    return 1;
+                }
+                if (o1Area > o2Area) {
+                    return -1;
+                }
+                return 0;
+            }
+            if (o1.level < o2.level) {
+                return 1;
+            }
+            return -1;
+        };
+        Arrays.sort(this.groups, groupComparator);
+    }
+
+    private void fixGroupLevels() {
+        int maxLevel = (int) Math.round(Math.log(BASE_LIGHTMAP_SIZE) / Math.log(2.0));
+        if (this.groups.length == 1) {
+            this.groups[0].level = maxLevel;
+            return;
+        }
+        //todo
+    }
+
+    private void ungroupQuads() {
+        this.quads.clear();
+        
+        float x = 0f;
+        float y = 0f;
+        for (QuadsGroup g : this.groups) {
+            float size = (float) Math.pow(2.0, g.level);
+            List<Quad> quadsList = g.quads;
+            float heightPerQuad = size / quadsList.size();
+
+            for (int i = 0; i < quadsList.size(); i++) {
+                Quad q = quadsList.get(i);
+                q.width = size;
+                q.height = heightPerQuad;
+                q.x = x;
+                q.y = y + (heightPerQuad * i);
+                this.quads.add(q);
+
+                this.totalHeight = Math.max(this.totalHeight, q.y + q.height);
+            }
+            
+            x += size;
+            this.totalWidth = Math.max(this.totalWidth, x);
+            if (x >= (BASE_LIGHTMAP_SIZE - 0.01f)) {
+                x = 0f;
+                y += size;
+            }
+        }
     }
 
     private void fitQuads() {
@@ -370,8 +429,8 @@ public class LightmapUVGenerator {
         for (Quad q : this.quads) {
             q.x *= scaleX;
             q.y *= scaleY;
-            q.width = q.size * scaleX;
-            q.height = q.size * scaleY;
+            q.width = q.width * scaleX;
+            q.height = q.height * scaleY;
             if ((q.x + q.width) > size) {
                 q.width = size - q.x;
             }
@@ -444,8 +503,10 @@ public class LightmapUVGenerator {
     public void process() {
         mapVertices();
         mapQuads();
-        calculateQuadAreasAndSort();
-        connectQuads();
+        calculateQuadAreas();
+        groupQuads();
+        fixGroupLevels();
+        ungroupQuads();
         fitQuads();
         calculateMargin();
         outputUVs();

@@ -288,8 +288,8 @@ public class BakedRaytracing {
                 float py = ((float) Math.floor(y)) + ((yOffset + 0.5f) * (1f / pcfSize));
                 if (!isInShadow(px, py)) {
                     shadow += 1f;
-                }
             }
+        }
         }
         shadow /= pcfSize * pcfSize;
         
@@ -337,14 +337,21 @@ public class BakedRaytracing {
         return false;
     }
 
-    private void fillLightmap() {
-        fillLightmapRight();
-        fillLightmapLeft();
-        fillLightmapTop();
-        fillLightmapBottom();
+    private void fillLightmapMargin() {
+        fillLightmapRight(false);
+        fillLightmapLeft(false);
+        fillLightmapTop(false);
+        fillLightmapBottom(false);
+    }
+    
+    private void fillLightmapCompletely() {
+        fillLightmapRight(true);
+        fillLightmapLeft(true);
+        fillLightmapTop(true);
+        fillLightmapBottom(true);
     }
 
-    private void fillLightmapRight() {
+    private void fillLightmapRight(boolean ignoreMarginLimit) {
         for (int y = 0; y < this.lightmapSize; y++) {
             float colorR = 0f;
             float colorG = 0f;
@@ -353,7 +360,7 @@ public class BakedRaytracing {
             int marginSize = 0;
             for (int x = 0; x < this.lightmapSize; x++) {
                 int currentMargin = this.marginMap[x + (y * this.lightmapSize)];
-                if (currentMargin == -1 && margin > 0) {
+                if (currentMargin == -1 && (margin > 0 || (ignoreMarginLimit && marginSize > 0))) {
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 0] = colorR;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 1] = colorG;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 2] = colorB;
@@ -370,7 +377,7 @@ public class BakedRaytracing {
         }
     }
 
-    private void fillLightmapLeft() {
+    private void fillLightmapLeft(boolean ignoreMarginLimit) {
         for (int y = 0; y < this.lightmapSize; y++) {
             float colorR = 0f;
             float colorG = 0f;
@@ -379,7 +386,7 @@ public class BakedRaytracing {
             int marginSize = 0;
             for (int x = (this.lightmapSize - 1); x >= 0; x--) {
                 int currentMargin = this.marginMap[x + (y * this.lightmapSize)];
-                if (currentMargin == -1 && margin > 0) {
+                if (currentMargin == -1 && (margin > 0 || (ignoreMarginLimit && marginSize > 0))) {
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 0] = colorR;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 1] = colorG;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 2] = colorB;
@@ -396,7 +403,7 @@ public class BakedRaytracing {
         }
     }
 
-    private void fillLightmapTop() {
+    private void fillLightmapTop(boolean ignoreMarginLimit) {
         for (int x = 0; x < this.lightmapSize; x++) {
             float colorR = 0f;
             float colorG = 0f;
@@ -405,7 +412,7 @@ public class BakedRaytracing {
             int marginSize = 0;
             for (int y = 0; y < this.lightmapSize; y++) {
                 int currentMargin = this.marginMap[x + (y * this.lightmapSize)];
-                if (currentMargin == -1 && margin > 0) {
+                if (currentMargin == -1 && (margin > 0 || (ignoreMarginLimit && marginSize > 0))) {
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 0] = colorR;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 1] = colorG;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 2] = colorB;
@@ -422,7 +429,7 @@ public class BakedRaytracing {
         }
     }
 
-    private void fillLightmapBottom() {
+    private void fillLightmapBottom(boolean ignoreMarginLimit) {
         for (int x = 0; x < this.lightmapSize; x++) {
             float colorR = 0f;
             float colorG = 0f;
@@ -431,7 +438,7 @@ public class BakedRaytracing {
             int marginSize = 0;
             for (int y = (this.lightmapSize - 1); y >= 0; y--) {
                 int currentMargin = this.marginMap[x + (y * this.lightmapSize)];
-                if (currentMargin == -1 && margin > 0) {
+                if (currentMargin == -1 && (margin > 0 || (ignoreMarginLimit && marginSize > 0))) {
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 0] = colorR;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 1] = colorG;
                     this.lightmap[((x * 3) + (y * this.lightmapSize * 3)) + 2] = colorB;
@@ -463,7 +470,10 @@ public class BakedRaytracing {
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
+            
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            
             glBindTexture(GL_TEXTURE_2D, 0);
             geometryCopy.setLightmapTextureHint(texture);
         });
@@ -475,7 +485,8 @@ public class BakedRaytracing {
             for (int i = 0; i < this.scene.length; i++) {
                 loadGeometry(i);
                 calculateLightmap();
-                fillLightmap();
+                //fillLightmapMargin();
+                //fillLightmapCompletely();
                 createLightmapTexture();
             }
         });
