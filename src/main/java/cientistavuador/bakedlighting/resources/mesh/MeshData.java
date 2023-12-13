@@ -27,12 +27,11 @@
 package cientistavuador.bakedlighting.resources.mesh;
 
 import cientistavuador.bakedlighting.Main;
+import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.util.BVH;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
@@ -58,17 +57,23 @@ public class MeshData {
     private int vao = 0;
     private int ebo = 0;
     private int vbo = 0;
-    private int textureHint = 0;
+    private int textureHint = Textures.EMPTY_TEXTURE;
+    private final int lightmapSizeHint;
 
-    public MeshData(String name, float[] vertices, int[] indices) {
+    public MeshData(String name, float[] vertices, int[] indices, int lightmapSizeHint) {
         this.name = name;
         this.vertices = vertices;
         this.indices = indices;
         this.futureBvh = CompletableFuture.supplyAsync(() -> {
             return BVH.createAlternative(vertices, MeshData.SIZE, MeshData.XYZ_OFFSET, indices);
         });
+        this.lightmapSizeHint = lightmapSizeHint;
     }
 
+    public int getLightmapSizeHint() {
+        return lightmapSizeHint;
+    }
+    
     public String getName() {
         return name;
     }

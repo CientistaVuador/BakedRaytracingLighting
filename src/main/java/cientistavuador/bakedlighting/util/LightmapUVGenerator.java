@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import org.joml.Intersectionf;
 
 /**
  *
@@ -88,10 +87,12 @@ public class LightmapUVGenerator {
 
     private class Quad {
 
+        float width;
+        float height;
+        float margin;
         float x;
         float y;
-        boolean topAvailable = true;
-        boolean rightAvailable = true;
+
         int v0;
         int v1;
         int v2;
@@ -99,9 +100,7 @@ public class LightmapUVGenerator {
         int sv0 = -1;
         int sv1 = -1;
         int sv2 = -1;
-        float width;
-        float height;
-        float margin;
+
         boolean grouped = false;
     }
 
@@ -111,6 +110,20 @@ public class LightmapUVGenerator {
         float height;
         int level = 0;
         final List<Quad> quads = new ArrayList<>();
+    }
+
+    private class QuadTree {
+
+        float x;
+        float y;
+        float size;
+
+        QuadTree bottomLeft;
+        QuadTree bottomRight;
+        QuadTree topLeft;
+        QuadTree topRight;
+
+        QuadsGroup quads;
     }
 
     private final float[] vertices;
@@ -127,8 +140,15 @@ public class LightmapUVGenerator {
 
     private QuadsGroup[] groups = null;
 
+    private int highestLevel = Integer.MIN_VALUE;
+    private int lowestLevel = Integer.MAX_VALUE;
+    private final Map<Integer, List<QuadTree>> quadTreesMap = new HashMap<>();
+    private QuadTree top;
+
     private float totalWidth = 0f;
     private float totalHeight = 0f;
+
+    private int highestInternalResolution = BASE_LIGHTMAP_SIZE;
 
     public LightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, int outUVOffset) {
         this.vertices = vertices;
@@ -383,41 +403,200 @@ public class LightmapUVGenerator {
         Arrays.sort(this.groups, groupComparator);
     }
 
-    private void fixGroupLevels() {
+    private void adjustGroupLevels() {
         int maxLevel = (int) Math.round(Math.log(BASE_LIGHTMAP_SIZE) / Math.log(2.0));
         if (this.groups.length == 1) {
             this.groups[0].level = maxLevel;
             return;
         }
-        //todo
+
+        int currentLevel = maxLevel - 1;
+        int nextLevel = currentLevel - 1;
+        for (int i = 0; i < this.groups.length; i++) {
+            int left = this.groups.length - (i + 1);
+            QuadsGroup next;
+            if ((i + 1) < this.groups.length && (next = this.groups[i + 1]).level < nextLevel) {
+                int offset = nextLevel - next.level;
+                for (int j = i + 1; j < this.groups.length; j++) {
+                    this.groups[j].level += offset;
+                }
+                continue;
+            }
+            QuadsGroup g = this.groups[i];
+            if (g.level == nextLevel) {
+                if (left == 0) {
+                    g.level = currentLevel;
+                    break;
+                }
+                currentLevel = nextLevel;
+                nextLevel = currentLevel - 1;
+                continue;
+            }
+        }
     }
 
-    private void ungroupQuads() {
-        this.quads.clear();
-        
-        float x = 0f;
-        float y = 0f;
-        for (QuadsGroup g : this.groups) {
-            float size = (float) Math.pow(2.0, g.level);
-            List<Quad> quadsList = g.quads;
-            float heightPerQuad = size / quadsList.size();
+    private void createQuadTrees() {
+        for (int i = 0; i < this.groups.length; i++) {
+            QuadsGroup g = this.groups[i];
 
-            for (int i = 0; i < quadsList.size(); i++) {
-                Quad q = quadsList.get(i);
-                q.width = size;
-                q.height = heightPerQuad;
-                q.x = x;
-                q.y = y + (heightPerQuad * i);
-                this.quads.add(q);
+            QuadTree tree = new QuadTree();
+            tree.quads = g;
+            tree.size = (float) Math.pow(2.0, g.level);
 
-                this.totalHeight = Math.max(this.totalHeight, q.y + q.height);
+            List<QuadTree> levelList = this.quadTreesMap.get(g.level);
+            if (levelList == null) {
+                levelList = new ArrayList<>();
+                this.quadTreesMap.put(g.level, levelList);
             }
-            
-            x += size;
-            this.totalWidth = Math.max(this.totalWidth, x);
-            if (x >= (BASE_LIGHTMAP_SIZE - 0.01f)) {
-                x = 0f;
-                y += size;
+            levelList.add(tree);
+
+            this.highestLevel = Math.max(this.highestLevel, g.level);
+            this.lowestLevel = Math.min(this.lowestLevel, g.level);
+        }
+    }
+
+    private void connectQuadTrees() {
+        for (int i = this.lowestLevel; i <= this.highestLevel; i++) {
+            float currentLevelSize = (float) Math.pow(2.0, i);
+            int nextLevel = i + 1;
+            float nextLevelSize = (float) Math.pow(2.0, nextLevel);
+            List<QuadTree> treeList = this.quadTreesMap.get(i);
+            if (treeList.size() == 1) {
+                this.highestLevel = i;
+                break;
+            }
+            List<QuadTree> nextLevelList = this.quadTreesMap.get(nextLevel);
+            if (nextLevelList == null) {
+                nextLevelList = new ArrayList<>();
+                this.quadTreesMap.put(nextLevel, nextLevelList);
+                this.highestLevel++;
+            }
+
+            int listSize = treeList.size();
+            for (int j = 0; j < listSize; j += 4) {
+                QuadTree bottomLeft = null;
+                QuadTree bottomRight = null;
+                QuadTree topLeft = null;
+                QuadTree topRight = null;
+                getQuads:
+                {
+                    int index = j;
+                    bottomLeft = treeList.get(index++);
+                    if (index >= listSize) {
+                        break getQuads;
+                    }
+                    bottomRight = treeList.get(index++);
+                    if (index >= listSize) {
+                        break getQuads;
+                    }
+                    topLeft = treeList.get(index++);
+                    if (index >= listSize) {
+                        break getQuads;
+                    }
+                    topRight = treeList.get(index++);
+                }
+
+                QuadTree upperTree = new QuadTree();
+                upperTree.size = nextLevelSize;
+
+                upperTree.bottomLeft = bottomLeft;
+                bottomLeft.x = 0f;
+                bottomLeft.y = 0f;
+
+                if (bottomRight != null) {
+                    upperTree.bottomRight = bottomRight;
+                    bottomRight.x = currentLevelSize;
+                    bottomRight.y = 0f;
+                }
+
+                if (topLeft != null) {
+                    upperTree.topLeft = topLeft;
+                    topLeft.x = 0f;
+                    topLeft.y = currentLevelSize;
+                }
+
+                if (topRight != null) {
+                    upperTree.topRight = topRight;
+                    topRight.x = currentLevelSize;
+                    topRight.y = currentLevelSize;
+                }
+
+                nextLevelList.add(upperTree);
+            }
+        }
+        this.top = this.quadTreesMap.get(this.highestLevel).get(0);
+    }
+
+    private void translateQuadTrees() {
+        Queue<QuadTree> toProcess = new ArrayDeque<>();
+        toProcess.add(this.top);
+
+        QuadTree q;
+        while ((q = toProcess.poll()) != null) {
+            float xOffset = q.x;
+            float yOffset = q.y;
+
+            if (q.bottomLeft != null) {
+                toProcess.add(q.bottomLeft);
+                q.bottomLeft.x += xOffset;
+                q.bottomLeft.y += yOffset;
+            }
+            if (q.bottomRight != null) {
+                toProcess.add(q.bottomRight);
+                q.bottomRight.x += xOffset;
+                q.bottomRight.y += yOffset;
+            }
+            if (q.topLeft != null) {
+                toProcess.add(q.topLeft);
+                q.topLeft.x += xOffset;
+                q.topLeft.y += yOffset;
+            }
+            if (q.topRight != null) {
+                toProcess.add(q.topRight);
+                q.topRight.x += xOffset;
+                q.topRight.y += yOffset;
+            }
+        }
+    }
+
+    private void ungroupQuadTrees() {
+        this.quads.clear();
+
+        Queue<QuadTree> toProcess = new ArrayDeque<>();
+        toProcess.add(this.top);
+
+        QuadTree q;
+        while ((q = toProcess.poll()) != null) {
+            if (q.quads != null) {
+                float size = q.size;
+                List<Quad> quadsList = q.quads.quads;
+                float heightPerQuad = size / quadsList.size();
+
+                for (int i = 0; i < quadsList.size(); i++) {
+                    Quad quad = quadsList.get(i);
+                    quad.width = size;
+                    quad.height = heightPerQuad;
+                    quad.x = q.x;
+                    quad.y = q.y + (heightPerQuad * i);
+                    this.quads.add(quad);
+                }
+
+                this.totalHeight = Math.max(this.totalHeight, q.y + q.size);
+                this.totalWidth = Math.max(this.totalWidth, q.x + q.size);
+                continue;
+            }
+
+            if (q.bottomLeft != null) {
+                toProcess.add(q.bottomLeft);
+            }
+            if (q.bottomRight != null) {
+                toProcess.add(q.bottomRight);
+            }
+            if (q.topLeft != null) {
+                toProcess.add(q.topLeft);
+            }
+            if (q.topRight != null) {
+                toProcess.add(q.topRight);
             }
         }
     }
@@ -453,6 +632,7 @@ public class LightmapUVGenerator {
                 height *= 2f;
             }
             q.margin = 1f / internalResolution;
+            this.highestInternalResolution = Math.max(this.highestInternalResolution, (int) internalResolution);
         }
     }
 
@@ -500,16 +680,20 @@ public class LightmapUVGenerator {
         }
     }
 
-    public void process() {
+    public int process() {
         mapVertices();
         mapQuads();
         calculateQuadAreas();
         groupQuads();
-        fixGroupLevels();
-        ungroupQuads();
+        adjustGroupLevels();
+        createQuadTrees();
+        connectQuadTrees();
+        translateQuadTrees();
+        ungroupQuadTrees();
         fitQuads();
         calculateMargin();
         outputUVs();
+        return this.highestInternalResolution;
     }
 
 }

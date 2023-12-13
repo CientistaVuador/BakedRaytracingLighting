@@ -31,7 +31,6 @@ import cientistavuador.bakedlighting.resources.mesh.MeshResources;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +60,7 @@ public class GeometriesLoader {
 
         ArrayDeque<Future<MeshData[]>> futureDatas = new ArrayDeque<>();
         List<MeshData> datas = new ArrayList<>();
-        
+
         for (int i = 0; i < names.length; i++) {
             final int index = i;
             if (DEBUG_OUTPUT) {
@@ -70,8 +69,8 @@ public class GeometriesLoader {
             futureDatas.add(CompletableFuture.supplyAsync(() -> {
                 MeshData[] e = MeshResources.load(names[index]);
                 if (DEBUG_OUTPUT) {
-                    for (MeshData m:e) {
-                        System.out.println("Finished loading geometry '" + m.getName() + ": " + (m.getVertices().length / MeshData.SIZE) + " vertices, " + m.getIndices().length + " indices.");
+                    for (MeshData m : e) {
+                        System.out.println("Finished loading geometry '" + m.getName() + ": " + (m.getVertices().length / MeshData.SIZE) + " vertices, " + m.getIndices().length + " indices, lightmap size hint: " + m.getLightmapSizeHint() + "x" + m.getLightmapSizeHint());
                     }
                 }
                 return e;
@@ -88,7 +87,7 @@ public class GeometriesLoader {
                 throw new RuntimeException(ex);
             }
         }
-        
+
         for (int i = 0; i < datas.size(); i++) {
             MeshData data = datas.get(i);
             if (DEBUG_OUTPUT) {
@@ -96,7 +95,7 @@ public class GeometriesLoader {
             }
             int vao = data.getVAO();
             if (DEBUG_OUTPUT) {
-                System.out.println("Finished sending geometry '" + data.getName() + "', index " + i + " to the gpu with object id "+vao+".");
+                System.out.println("Finished sending geometry '" + data.getName() + "', index " + i + " to the gpu with object id " + vao + ".");
             }
         }
 
@@ -104,7 +103,7 @@ public class GeometriesLoader {
             System.out.println("Finished loading geometries.");
         }
         HashMap<String, MeshData> map = new HashMap<>();
-        for (MeshData m:datas) {
+        for (MeshData m : datas) {
             map.put(m.getName(), m);
         }
         return map;

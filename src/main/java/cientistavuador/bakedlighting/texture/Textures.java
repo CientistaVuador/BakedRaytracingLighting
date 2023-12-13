@@ -34,13 +34,29 @@ import static org.lwjgl.opengl.GL33C.*;
  */
 public class Textures {
     
+    public static final int EMPTY_LIGHTMAP_TEXTURE;
     public static final int EMPTY_TEXTURE;
     
     static {
+        EMPTY_LIGHTMAP_TEXTURE = glGenTextures();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, EMPTY_LIGHTMAP_TEXTURE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, new float[] {1f, 1f, 1f, 1f});
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        
         EMPTY_TEXTURE = glGenTextures();
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, EMPTY_TEXTURE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, new float[] {1f, 1f, 1f, 1f});
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 2, 2, 0, GL_RGBA, GL_FLOAT, new float[] {
+            1f, 0f, 1f, 1f, 0f, 0f, 0f, 1f,
+            0f, 0f, 0f, 1f, 1f, 0f, 1f, 1f
+        });
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
     

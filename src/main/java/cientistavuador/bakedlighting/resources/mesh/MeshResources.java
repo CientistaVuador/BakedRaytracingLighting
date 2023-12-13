@@ -326,7 +326,7 @@ public class MeshResources {
                 MeshData.UV_OFFSET,
                 MeshData.T_XYZ_OFFSET
         );
-        MeshUtils.generateLightmapUV(
+        int lightmapSize = MeshUtils.generateLightmapUV(
                 newVertices,
                 MeshData.SIZE,
                 MeshData.XYZ_OFFSET,
@@ -341,7 +341,8 @@ public class MeshResources {
         return new MeshData(
                 this.name+this.objectName,
                 verticesIndices.getA(),
-                verticesIndices.getB()
+                verticesIndices.getB(),
+                lightmapSize
         );
     }
 

@@ -27,7 +27,6 @@
 package cientistavuador.bakedlighting.geometry;
 
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
-import cientistavuador.bakedlighting.resources.mesh.MeshResources;
 import cientistavuador.bakedlighting.texture.Textures;
 import java.util.Map;
 

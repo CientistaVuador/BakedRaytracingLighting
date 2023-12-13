@@ -200,7 +200,7 @@ public class MeshUtils {
         );
     }
     
-    public static void generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int outLightmapUV) {
+    public static int generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int outLightmapUV) {
         if (vertices.length % vertexSize != 0) {
             throw new IllegalArgumentException("Wrong size.");
         }
@@ -208,9 +208,9 @@ public class MeshUtils {
             throw new IllegalArgumentException("Not a triangulated mesh.");
         }
         if (vertices.length == 0) {
-            return;
+            return LightmapUVGenerator.BASE_LIGHTMAP_SIZE;
         }
-        new LightmapUVGenerator(vertices, vertexSize, xyzOffset, outLightmapUV).process();
+        return new LightmapUVGenerator(vertices, vertexSize, xyzOffset, outLightmapUV).process();
     }
     
     private MeshUtils() {

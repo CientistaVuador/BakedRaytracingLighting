@@ -74,7 +74,7 @@ public class Geometry {
     private final Matrix3f normalModel = new Matrix3f();
     private final Matrix3f inverseNormalModel = new Matrix3f();
     
-    private int lightmapTextureHint = Textures.EMPTY_TEXTURE;
+    private int lightmapTextureHint = Textures.EMPTY_LIGHTMAP_TEXTURE;
     
     public Geometry(MeshData mesh) {
         this.mesh = mesh;
