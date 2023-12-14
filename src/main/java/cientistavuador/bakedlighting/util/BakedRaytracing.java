@@ -29,14 +29,21 @@ package cientistavuador.bakedlighting.util;
 import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
+import org.joml.Vector3i;
 import static org.lwjgl.opengl.GL33C.*;
 
 /**
@@ -46,6 +53,7 @@ import static org.lwjgl.opengl.GL33C.*;
 public class BakedRaytracing {
 
     private final Geometry[] scene;
+    private final Map<MeshData, SoftwareTexture> sceneTextures = new HashMap<>();
     private final int maxLightmapSize;
     private final boolean clampToMeshLightmapSize;
     private final Vector3f sunDirection;
@@ -65,13 +73,6 @@ public class BakedRaytracing {
     private float[] positionMap = null;
     private float[] normalMap = null;
     private float[] tangentMap = null;
-
-    private int i0 = 0;
-    private int i1 = 0;
-    private int i2 = 0;
-    private final Vector3f a = new Vector3f();
-    private final Vector3f b = new Vector3f();
-    private final Vector3f c = new Vector3f();
 
     private Future<Void> processingTask = null;
     private String currentStatus = "Idle";
@@ -95,16 +96,46 @@ public class BakedRaytracing {
         }
     }
 
+    private void loadTextures() {
+        setProgressBarStep(this.scene.length);
+        for (int i = 0; i < this.scene.length; i++) {
+            Geometry geo = this.scene[i];
+            this.currentStatus = "Loading Texture (" + i + "/" + this.scene.length + ")";
+            SoftwareTexture t = this.sceneTextures.get(geo.getMesh());
+            if (t == null) {
+                CompletableFuture<Void> future = new CompletableFuture<>();
+                Main.MAIN_TASKS.add(() -> {
+                    try {
+                        this.sceneTextures.put(
+                                geo.getMesh(),
+                                SoftwareTexture.fromGLTexture2D(geo.getMesh().getTextureHint())
+                        );
+                        Main.checkGLError();
+                        future.complete(null);
+                    } catch (Exception ex) {
+                        future.completeExceptionally(ex);
+                    }
+                });
+                try {
+                    future.get();
+                } catch (InterruptedException | ExecutionException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+            stepProgressBar();
+        }
+    }
+
     private void calculateAreas() {
         Vector3f p0 = new Vector3f();
         Vector3f p1 = new Vector3f();
         Vector3f p2 = new Vector3f();
-        
+
         setProgressBarStep(this.scene.length);
         this.areas = new float[this.scene.length];
         for (int i = 0; i < this.scene.length; i++) {
             Geometry geo = this.scene[i];
-            this.currentStatus = "Calculating area ("+geo.getMesh().getName()+")";
+            this.currentStatus = "Calculating area (" + geo.getMesh().getName() + ")";
             Matrix4fc model = geo.getModel();
 
             float[] gvertices = geo.getMesh().getVertices();
@@ -153,10 +184,10 @@ public class BakedRaytracing {
 
     private void loadGeometry(int index) {
         this.geometry = this.scene[index];
-        
+
         this.currentProgress = 0f;
-        this.currentStatus = "Loading Geometry "+this.geometry.getMesh().getName();
-        
+        this.currentStatus = "Loading Geometry...";
+
         if (this.maxLightmapSize > LightmapUVGenerator.BASE_LIGHTMAP_SIZE) {
             float area = this.areas[index];
             area = (area - this.smallestArea) / (this.largestArea - this.smallestArea);
@@ -166,7 +197,7 @@ public class BakedRaytracing {
         } else {
             this.lightmapSize = this.maxLightmapSize;
         }
-        
+
         if (this.clampToMeshLightmapSize && this.lightmapSize < this.geometry.getMesh().getLightmapSizeHint()) {
             this.lightmapSize = this.geometry.getMesh().getLightmapSizeHint();
         }
@@ -183,26 +214,17 @@ public class BakedRaytracing {
                 this.marginMap[x + (y * this.lightmapSize)] = -1;
             }
         }
-        
+
         this.currentProgress = 100f;
     }
-    
-    private void computeBuffers() {
-        
+
+    private float lerp(Vector3fc weights, int i0, int i1, int i2, int offset) {
+        float va  = this.vertices[(i0 * MeshData.SIZE) + offset];
+        float vb = this.vertices[(i1 * MeshData.SIZE) + offset];
+        float vc = this.vertices[(i2 * MeshData.SIZE) + offset];
+        return (va  * weights.x()) + (vb * weights.y()) + (vc * weights.z());
     }
 
-    private void bakeLightmap() {
-        
-    }
-    
-    private void processLine(int y) {
-        
-    }
-    
-    private void processPixel(int x, int y) {
-        
-    }
-    
     private static int clamp(int v, int min, int max) {
         if (v > max) {
             return max;
@@ -240,18 +262,30 @@ public class BakedRaytracing {
         return margin;
     }
 
-    private void calculateLightmap() {
+    private void computeBuffers() {
+        setProgressBarStep(this.indices.length);
+
         Vector3f weights = new Vector3f();
 
-        Vector3f p = new Vector3f();
+        Vector3f pixelPos = new Vector3f();
+
+        Vector3f position = new Vector3f();
+        Vector3f normal = new Vector3f();
+        Vector3f tangent = new Vector3f();
+
+        Vector3f a = new Vector3f();
+        Vector3f b = new Vector3f();
+        Vector3f c = new Vector3f();
 
         for (int i = 0; i < this.indices.length; i += 3) {
-            this.i0 = this.indices[i + 0];
-            this.i1 = this.indices[i + 1];
-            this.i2 = this.indices[i + 2];
-            int v0 = (this.i0 * MeshData.SIZE);
-            int v1 = (this.i1 * MeshData.SIZE);
-            int v2 = (this.i2 * MeshData.SIZE);
+            this.currentStatus = "Computing Deferred Buffers (" + i + "/" + this.indices.length + ")";
+
+            int i0 = this.indices[i + 0];
+            int i1 = this.indices[i + 1];
+            int i2 = this.indices[i + 2];
+            int v0 = (i0 * MeshData.SIZE);
+            int v1 = (i1 * MeshData.SIZE);
+            int v2 = (i2 * MeshData.SIZE);
 
             float v0x = this.vertices[v0 + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
             float v0y = this.vertices[v0 + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
@@ -261,6 +295,10 @@ public class BakedRaytracing {
 
             float v2x = this.vertices[v2 + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
             float v2y = this.vertices[v2 + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+
+            a.set(v0x, v0y, 0f);
+            b.set(v1x, v1y, 0f);
+            c.set(v2x, v2y, 0f);
 
             int minX = (int) Math.floor(Math.min(v0x, Math.min(v1x, v2x)));
             int minY = (int) Math.floor(Math.min(v0y, Math.min(v1y, v2y)));
@@ -272,17 +310,11 @@ public class BakedRaytracing {
             maxX = clamp(maxX, 0, this.lightmapSize - 1);
             maxY = clamp(maxY, 0, this.lightmapSize - 1);
 
-            this.a.set(v0x, v0y, 0f);
-            this.b.set(v1x, v1y, 0f);
-            this.c.set(v2x, v2y, 0f);
-
-            Vector3f outColor = new Vector3f();
-
             int margin = calculateMargin(v0, v1, v2);
             for (int y = minY; y <= maxY; y++) {
                 for (int x = minX; x <= maxX; x++) {
-                    p.set(x + 0.5f, y + 0.5f, 0f);
-                    RasterUtils.barycentricWeights(p, this.a, this.b, this.c, weights);
+                    pixelPos.set(x + 0.5f, y + 0.5f, 0f);
+                    RasterUtils.barycentricWeights(pixelPos, a, b, c, weights);
 
                     float wx = weights.x();
                     float wy = weights.y();
@@ -292,122 +324,214 @@ public class BakedRaytracing {
                         continue;
                     }
 
-                    calculateLightmapPixel(x + 0.5f, y + 0.5f, weights, outColor);
-
-                    this.lightMap[(x * 3) + (y * this.lightmapSize * 3) + 0] = outColor.x();
-                    this.lightMap[(x * 3) + (y * this.lightmapSize * 3) + 1] = outColor.y();
-                    this.lightMap[(x * 3) + (y * this.lightmapSize * 3) + 2] = outColor.z();
                     this.marginMap[x + (y * this.lightmapSize)] = margin;
+
+                    this.indexMap[((x * 3) + 0) + (y * this.lightmapSize * 3)] = i0;
+                    this.indexMap[((x * 3) + 1) + (y * this.lightmapSize * 3)] = i1;
+                    this.indexMap[((x * 3) + 2) + (y * this.lightmapSize * 3)] = i2;
+
+                    position.set(
+                            lerp(weights, i0, i1, i2, MeshData.XYZ_OFFSET + 0),
+                            lerp(weights, i0, i1, i2, MeshData.XYZ_OFFSET + 1),
+                            lerp(weights, i0, i1, i2, MeshData.XYZ_OFFSET + 2)
+                    );
+                    normal.set(
+                            lerp(weights, i0, i1, i2, MeshData.N_XYZ_OFFSET + 0),
+                            lerp(weights, i0, i1, i2, MeshData.N_XYZ_OFFSET + 1),
+                            lerp(weights, i0, i1, i2, MeshData.N_XYZ_OFFSET + 2)
+                    );
+                    tangent.set(
+                            lerp(weights, i0, i1, i2, MeshData.T_XYZ_OFFSET + 0),
+                            lerp(weights, i0, i1, i2, MeshData.T_XYZ_OFFSET + 1),
+                            lerp(weights, i0, i1, i2, MeshData.T_XYZ_OFFSET + 2)
+                    );
+
+                    this.geometry.getModel().transformProject(position);
+                    this.geometry.getNormalModel().transform(normal).normalize();
+                    this.geometry.getNormalModel().transform(tangent).normalize();
+
+                    this.positionMap[((x * 3) + 0) + (y * this.lightmapSize * 3)] = position.x();
+                    this.positionMap[((x * 3) + 1) + (y * this.lightmapSize * 3)] = position.y();
+                    this.positionMap[((x * 3) + 2) + (y * this.lightmapSize * 3)] = position.z();
+
+                    this.normalMap[((x * 3) + 0) + (y * this.lightmapSize * 3)] = normal.x();
+                    this.normalMap[((x * 3) + 1) + (y * this.lightmapSize * 3)] = normal.y();
+                    this.normalMap[((x * 3) + 2) + (y * this.lightmapSize * 3)] = normal.z();
+
+                    this.tangentMap[((x * 3) + 0) + (y * this.lightmapSize * 3)] = tangent.x();
+                    this.tangentMap[((x * 3) + 1) + (y * this.lightmapSize * 3)] = tangent.y();
+                    this.tangentMap[((x * 3) + 2) + (y * this.lightmapSize * 3)] = tangent.z();
                 }
+            }
+
+            for (int j = 0; j < 3; j++) {
+                stepProgressBar();
             }
         }
     }
 
-    private void calculateLightmapPixel(float x, float y, Vector3fc weights, Vector3f outColor) {
-        float v0wx = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 0];
-        float v0wy = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 1];
-        float v0wz = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 2];
+    private void bakeLightmap() {
+        setProgressBarStep(this.lightmapSize);
 
-        float v1wx = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 0];
-        float v1wy = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 1];
-        float v1wz = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 2];
-
-        float v2wx = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 0];
-        float v2wy = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 1];
-        float v2wz = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 2];
-
-        float worldx = v0wx * weights.x() + v1wx * weights.y() + v2wx * weights.z();
-        float worldy = v0wy * weights.x() + v1wy * weights.y() + v2wy * weights.z();
-        float worldz = v0wz * weights.x() + v1wz * weights.y() + v2wz * weights.z();
-
-        Vector3f worldpos = new Vector3f(worldx, worldy, worldz);
-
-        float v0nx = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 0];
-        float v0ny = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 1];
-        float v0nz = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 2];
-
-        float v1nx = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 0];
-        float v1ny = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 1];
-        float v1nz = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 2];
-
-        float v2nx = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 0];
-        float v2ny = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 1];
-        float v2nz = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.N_XYZ_OFFSET + 2];
-
-        float worldnx = v0nx * weights.x() + v1nx * weights.y() + v2nx * weights.z();
-        float worldny = v0ny * weights.x() + v1ny * weights.y() + v2ny * weights.z();
-        float worldnz = v0nz * weights.x() + v1nz * weights.y() + v2nz * weights.z();
-
-        Vector3f worldnormal = new Vector3f(worldnx, worldny, worldnz).normalize();
-
-        int pcfSize = 2;
-        float shadow = 0f;
-        for (int xOffset = 0; xOffset < pcfSize; xOffset++) {
-            for (int yOffset = 0; yOffset < pcfSize; yOffset++) {
-                float px = ((float) Math.floor(x)) + ((xOffset + 0.5f) * (1f / pcfSize));
-                float py = ((float) Math.floor(y)) + ((yOffset + 0.5f) * (1f / pcfSize));
-                if (!isInShadow(px, py)) {
-                    shadow += 1f;
+        int amountOfCores = Runtime.getRuntime().availableProcessors();
+        ExecutorService service = Executors.newFixedThreadPool(amountOfCores);
+        List<Future<?>> tasks = new ArrayList<>(amountOfCores);
+        for (int y = 0; y < this.lightmapSize; y += amountOfCores) {
+            this.currentStatus = "Baking (" + y + "/" + this.lightmapSize + ")";
+            for (int i = 0; i < amountOfCores; i++) {
+                final int line = y + i;
+                if (line >= this.lightmapSize) {
+                    break;
                 }
+                tasks.add(service.submit(() -> {
+                    processLine(line);
+                }));
+            }
+            for (Future<?> f : tasks) {
+                try {
+                    f.get();
+                } catch (InterruptedException | ExecutionException ex) {
+                    service.shutdown();
+                    throw new RuntimeException(ex);
+                }
+            }
+            tasks.clear();
+            for (int i = 0; i < amountOfCores; i++) {
+                stepProgressBar();
+            }
+        }
+        service.shutdown();
+    }
+
+    private void processLine(int y) {
+        Vector3i triangle = new Vector3i();
+        Vector3f position = new Vector3f();
+        Vector3f normal = new Vector3f();
+        Vector3f tangent = new Vector3f();
+        Vector3f outColor = new Vector3f();
+        for (int x = 0; x < this.lightmapSize; x++) {
+            int margin = this.marginMap[x + (y * this.lightmapSize)];
+            if (margin == -1) {
+                continue;
+            }
+
+            int i0 = this.indexMap[((x * 3) + 0) + (y * this.lightmapSize * 3)];
+            int i1 = this.indexMap[((x * 3) + 1) + (y * this.lightmapSize * 3)];
+            int i2 = this.indexMap[((x * 3) + 2) + (y * this.lightmapSize * 3)];
+
+            float wx = this.positionMap[((x * 3) + 0) + (y * this.lightmapSize * 3)];
+            float wy = this.positionMap[((x * 3) + 1) + (y * this.lightmapSize * 3)];
+            float wz = this.positionMap[((x * 3) + 2) + (y * this.lightmapSize * 3)];
+
+            float nx = this.normalMap[((x * 3) + 0) + (y * this.lightmapSize * 3)];
+            float ny = this.normalMap[((x * 3) + 1) + (y * this.lightmapSize * 3)];
+            float nz = this.normalMap[((x * 3) + 2) + (y * this.lightmapSize * 3)];
+
+            float tx = this.tangentMap[((x * 3) + 0) + (y * this.lightmapSize * 3)];
+            float ty = this.tangentMap[((x * 3) + 1) + (y * this.lightmapSize * 3)];
+            float tz = this.tangentMap[((x * 3) + 2) + (y * this.lightmapSize * 3)];
+
+            triangle.set(i0, i1, i2);
+            position.set(wx, wy, wz);
+            normal.set(nx, ny, nz);
+            tangent.set(tx, ty, tz);
+
+            outColor.zero();
+
+            processPixel(x, y, triangle, position, normal, tangent, outColor);
+
+            this.lightMap[((x * 3) + 0) + (y * this.lightmapSize * 3)] = outColor.x();
+            this.lightMap[((x * 3) + 1) + (y * this.lightmapSize * 3)] = outColor.y();
+            this.lightMap[((x * 3) + 2) + (y * this.lightmapSize * 3)] = outColor.z();
+        }
+    }
+
+    private float testShadow(float pixelX, float pixelY, Vector3i triangle) {
+        float v0x = this.vertices[(triangle.x() * MeshData.SIZE) + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
+        float v0y = this.vertices[(triangle.x() * MeshData.SIZE) + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+
+        float v1x = this.vertices[(triangle.y() * MeshData.SIZE) + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
+        float v1y = this.vertices[(triangle.y() * MeshData.SIZE) + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+
+        float v2x = this.vertices[(triangle.z() * MeshData.SIZE) + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
+        float v2y = this.vertices[(triangle.z() * MeshData.SIZE) + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+
+        Vector3f a = new Vector3f(v0x, v0y, 0f);
+        Vector3f b = new Vector3f(v1x, v1y, 0f);
+        Vector3f c = new Vector3f(v2x, v2y, 0f);
+        Vector3f p = new Vector3f(pixelX, pixelY, 0f);
+        Vector3f weights = new Vector3f();
+        RasterUtils.barycentricWeights(p, a, b, c, weights);
+
+        Vector3f position = new Vector3f(
+                lerp(weights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 0),
+                lerp(weights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 1),
+                lerp(weights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 2)
+        );
+
+        float shadow = 1f;
+        RayResult[] results = Geometry.testRay(position, this.sunDirection, this.scene);
+        for (RayResult r : results) {
+            if (r.getDistance() < 0.001f) {
+                continue;
+            }
+            if (r.getGeometry() == this.geometry && r.i0() == triangle.x() && r.i1() == triangle.y() && r.i2() == triangle.z()) {
+                continue;
+            }
+            shadow = 0f;
+            break;
+        }
+
+        return shadow;
+    }
+    
+    private void processPixel(int pixelX, int pixelY, Vector3i triangle, Vector3fc position, Vector3fc normal, Vector3fc tangent, Vector3f outColor) {
+        int pcfSize = 4;
+        float shadow = 0f;
+        for (int x = 0; x < pcfSize; x++) {
+            for (int y = 0; y < pcfSize; y++) {
+                shadow += testShadow(
+                        pixelX + (x * (1f / pcfSize)),
+                        pixelY + (y * (1f / pcfSize)),
+                        triangle
+                );
             }
         }
         shadow /= pcfSize * pcfSize;
-
+        
         outColor
                 .set(1.5f, 1.5f, 1.5f)
-                .mul(Math.max(worldnormal.dot(this.sunDirection), 0f))
+                .mul(Math.max(normal.dot(this.sunDirection), 0f))
                 .mul(shadow)
                 .add(0.2f, 0.2f, 0.2f);
     }
 
-    private boolean isInShadow(float pixelX, float pixelY) {
-        Vector3f weights = new Vector3f();
-        Vector3f p = new Vector3f(pixelX, pixelY, 0f);
-
-        RasterUtils.barycentricWeights(p, this.a, this.b, this.c, weights);
-
-        float v0wx = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 0];
-        float v0wy = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 1];
-        float v0wz = this.vertices[(this.i0 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 2];
-
-        float v1wx = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 0];
-        float v1wy = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 1];
-        float v1wz = this.vertices[(this.i1 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 2];
-
-        float v2wx = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 0];
-        float v2wy = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 1];
-        float v2wz = this.vertices[(this.i2 * MeshData.SIZE) + MeshData.XYZ_OFFSET + 2];
-
-        float worldx = v0wx * weights.x() + v1wx * weights.y() + v2wx * weights.z();
-        float worldy = v0wy * weights.x() + v1wy * weights.y() + v2wy * weights.z();
-        float worldz = v0wz * weights.x() + v1wz * weights.y() + v2wz * weights.z();
-
-        Vector3f worldpos = new Vector3f(worldx, worldy, worldz);
-
-        RayResult[] results = Geometry.testRay(worldpos, this.sunDirection, this.scene);
-
-        for (RayResult r : results) {
-            if (r.i0() != this.i0 && r.i1() != this.i1 && r.i2() != this.i2) {
-                if (r.getDistance() > 0.001f) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     private void fillLightmapMargin() {
+        this.currentStatus = "Filling Margins";
+        setProgressBarStep(4);
+
         fillLightmapRight(false);
+        stepProgressBar();
         fillLightmapLeft(false);
+        stepProgressBar();
         fillLightmapTop(false);
+        stepProgressBar();
         fillLightmapBottom(false);
+        stepProgressBar();
     }
 
     private void fillLightmapCompletely() {
+        this.currentStatus = "Filling Empty Pixels";
+        setProgressBarStep(4);
+
         fillLightmapRight(true);
+        stepProgressBar();
         fillLightmapLeft(true);
+        stepProgressBar();
         fillLightmapTop(true);
+        stepProgressBar();
         fillLightmapBottom(true);
+        stepProgressBar();
     }
 
     private void fillLightmapRight(boolean ignoreMarginLimit) {
@@ -515,6 +639,9 @@ public class BakedRaytracing {
     }
 
     private void createLightmapTexture() {
+        this.currentStatus = "Creating texture";
+        this.currentProgress = 0f;
+
         final float[] lightmapCopy = this.lightMap.clone();
         final int lightmapSizeCopy = this.lightmapSize;
         final Geometry geometryCopy = this.geometry;
@@ -536,9 +663,14 @@ public class BakedRaytracing {
             glBindTexture(GL_TEXTURE_2D, 0);
             geometryCopy.setLightmapTextureHint(texture);
         });
+
+        this.currentProgress = 100f;
     }
 
     public String getCurrentStatus() {
+        if (this.geometry != null) {
+            return "[" + this.geometry.getMesh().getName() + "] " + this.currentStatus;
+        }
         return currentStatus;
     }
 
@@ -590,16 +722,17 @@ public class BakedRaytracing {
         }
         this.processingTask = CompletableFuture.runAsync(() -> {
             waitForBVHs();
+            loadTextures();
             calculateAreas();
             for (int i = 0; i < this.scene.length; i++) {
                 loadGeometry(i);
                 computeBuffers();
                 bakeLightmap();
-                calculateLightmap();
                 fillLightmapMargin();
                 fillLightmapCompletely();
                 createLightmapTexture();
             }
+            this.geometry = null;
             this.currentStatus = "Idle";
             this.currentProgress = 0;
         });
