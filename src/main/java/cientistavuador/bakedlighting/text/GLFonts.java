@@ -36,6 +36,7 @@ public class GLFonts {
     
     public static final GLFont ROBOTO_BOLD;
     public static final GLFont OPENSANS_LIGHT_ITALIC;
+    public static final GLFont SPACE_MONO_REGULAR;
     
     static {
         if (DEBUG_OUTPUT) {
@@ -45,10 +46,12 @@ public class GLFonts {
         GLFont[] fonts = GLFontLoader.load(new String[] {
             "Roboto-Bold.zip",
             "OpenSans-Light-Italic.zip",
+            "SpaceMono-Regular.zip"
         });
         
         ROBOTO_BOLD = fonts[0];
         OPENSANS_LIGHT_ITALIC = fonts[1];
+        SPACE_MONO_REGULAR = fonts[2];
         
         if (DEBUG_OUTPUT) {
             System.out.println("Finished loading fonts.");

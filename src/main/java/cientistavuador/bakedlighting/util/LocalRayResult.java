@@ -64,7 +64,7 @@ public class LocalRayResult {
     public Vector3fc getLocalHitpoint() {
         return localHitpoint;
     }
-
+    
     public int i0() {
         return i0;
     }
@@ -76,7 +76,7 @@ public class LocalRayResult {
     public int i2() {
         return i2;
     }
-
+    
     public boolean frontFace() {
         return frontFace;
     }

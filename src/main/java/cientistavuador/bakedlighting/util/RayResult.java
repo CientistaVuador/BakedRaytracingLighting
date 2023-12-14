@@ -81,7 +81,7 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
     public float getDistance() {
         return distance;
     }
-
+    
     @Override
     public int compareTo(RayResult o) {
         if (this.getDistance() > o.getDistance()) {

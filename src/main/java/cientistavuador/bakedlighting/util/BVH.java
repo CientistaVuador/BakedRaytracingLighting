@@ -455,7 +455,7 @@ public class BVH implements Aab {
                                 c.set(this.vertices[(i2 * vertexSize) + xyzOffset + 0], this.vertices[(i2 * vertexSize) + xyzOffset + 1], this.vertices[(i2 * vertexSize) + xyzOffset + 2]);
                                 
                                 float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
-                                if (hit > 0f) {
+                                if (hit >= 0f) {
                                     ba.set(b).sub(a).normalize();
                                     ca.set(c).sub(a).normalize();
                                     cross.set(ba).cross(ca).normalize();

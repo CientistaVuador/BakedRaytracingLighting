@@ -28,10 +28,14 @@ package cientistavuador.bakedlighting;
 
 import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
+import cientistavuador.bakedlighting.debug.DebugCounter;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
+import cientistavuador.bakedlighting.text.GLFontRenderer;
+import cientistavuador.bakedlighting.text.GLFontSpecification;
+import cientistavuador.bakedlighting.text.GLFontSpecifications;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedRaytracing;
@@ -55,9 +59,11 @@ public class Game {
 
     private final FreeCamera camera = new FreeCamera();
     private final Geometry[] geometries = new Geometry[Geometries.GARAGE.length];
-    
+    private RayResult ray = null;
+    private final BakedRaytracing baked = new BakedRaytracing(geometries, 512, true, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
+
     private Game() {
-        
+
     }
 
     public void start() {
@@ -74,16 +80,17 @@ public class Game {
         program.setTextureUnit(0);
         program.setLightingEnabled(true);
         glUseProgram(0);
-        
+
         for (int i = 0; i < geometries.length; i++) {
             geometries[i] = new Geometry(Geometries.GARAGE[i]);
         }
-        
-        BakedRaytracing b = new BakedRaytracing(geometries, 512, true, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
-        b.bake();
     }
-
+    
     public void loop() {
+        if (ray != null) {
+            LineRender.queueRender(ray.getOrigin(), ray.getHitpoint());
+        }
+
         camera.updateMovement();
         camera.updateUBO();
 
@@ -108,6 +115,16 @@ public class Game {
         AabRender.renderQueue(camera);
         LineRender.renderQueue(camera);
 
+        String[] text = new String[]{
+            new StringBuilder()
+                    .append("R - Bake Lightmap\n")
+                    .append(this.baked.getCurrentProgressBar()).append('\n')
+                    .append("Status: ").append(this.baked.getCurrentStatus()).append('\n')
+                    .toString()
+        };
+        GLFontRenderer.render(-0.795f, -0.605f, new GLFontSpecification[] {GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
+        GLFontRenderer.render(-0.80f, -0.60f, new GLFontSpecification[] {GLFontSpecifications.SPACE_MONO_REGULAR_0_04_WHITE}, text);
+
         Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";
         Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
     }
@@ -124,10 +141,22 @@ public class Game {
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
             Vector3f origin = new Vector3f().set(camera.getPosition());
             Vector3f direction = new Vector3f().set(camera.getFront());
-            
+
+            DebugCounter c = new DebugCounter();
+            c.markStart("ray");
             RayResult[] result = Geometry.testRay(origin, direction, geometries);
-            for (RayResult r:result) {
-                System.out.println(r);
+            if (result.length != 0) {
+                this.ray = result[0];
+            }
+            c.markEnd("ray");
+            c.print();
+        }
+        if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+            if (this.baked.isDone()) {
+                this.baked.finishProcessing();
+            }
+            if (!this.baked.isProcessing()) {
+                this.baked.beginProcessing();
             }
         }
     }

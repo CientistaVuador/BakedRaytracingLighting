@@ -412,6 +412,8 @@ public class LightmapUVGenerator {
 
         int currentLevel = maxLevel - 1;
         int nextLevel = currentLevel - 1;
+        int count = 0;
+        int capacity = 4;
         for (int i = 0; i < this.groups.length; i++) {
             int left = this.groups.length - (i + 1);
             QuadsGroup next;
@@ -420,7 +422,6 @@ public class LightmapUVGenerator {
                 for (int j = i + 1; j < this.groups.length; j++) {
                     this.groups[j].level += offset;
                 }
-                continue;
             }
             QuadsGroup g = this.groups[i];
             if (g.level == nextLevel) {
@@ -428,8 +429,20 @@ public class LightmapUVGenerator {
                     g.level = currentLevel;
                     break;
                 }
+                capacity = (4 - count) * 4;
+                count = 1;
+                if (left < (capacity - 4)) {
+                    g.level = currentLevel;
+                    capacity -= 4;
+                    count = 0;
+                }
                 currentLevel = nextLevel;
                 nextLevel = currentLevel - 1;
+                continue;
+            }
+            if (g.level == currentLevel) {
+                count++;
+                capacity--;
                 continue;
             }
         }
@@ -461,15 +474,16 @@ public class LightmapUVGenerator {
             int nextLevel = i + 1;
             float nextLevelSize = (float) Math.pow(2.0, nextLevel);
             List<QuadTree> treeList = this.quadTreesMap.get(i);
-            if (treeList.size() == 1) {
-                this.highestLevel = i;
-                break;
-            }
             List<QuadTree> nextLevelList = this.quadTreesMap.get(nextLevel);
             if (nextLevelList == null) {
-                nextLevelList = new ArrayList<>();
-                this.quadTreesMap.put(nextLevel, nextLevelList);
-                this.highestLevel++;
+                if (treeList.size() == 1) {
+                    this.highestLevel = i;
+                    break;
+                } else {
+                    nextLevelList = new ArrayList<>();
+                    this.quadTreesMap.put(nextLevel, nextLevelList);
+                    this.highestLevel++;
+                }
             }
 
             int listSize = treeList.size();

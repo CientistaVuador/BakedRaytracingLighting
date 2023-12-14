@@ -33,38 +33,65 @@ import static org.lwjgl.opengl.GL33C.*;
  * @author Cien
  */
 public class Textures {
-    
+
     public static final int EMPTY_LIGHTMAP_TEXTURE;
     public static final int EMPTY_TEXTURE;
-    
+
     static {
         EMPTY_LIGHTMAP_TEXTURE = glGenTextures();
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, EMPTY_LIGHTMAP_TEXTURE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, new float[] {1f, 1f, 1f, 1f});
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 1, 1, 0, GL_RGBA, GL_FLOAT, new float[]{1f, 1f, 1f, 1f});
         glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glBindTexture(GL_TEXTURE_2D, 0);
-        
+
+        int blackPixel = 0x00_00_00_FF;
+        int pinkPixel = 0xFF_00_FF_FF;
+        int emptyTextureSize = 64;
+        int[] emptyTexturePixels = new int[emptyTextureSize * emptyTextureSize];
+        for (int y = 0; y < emptyTextureSize; y++) {
+            int pixelA = pinkPixel;
+            int pixelB = blackPixel;
+            if (y % 2 != 0) {
+                pixelA = blackPixel;
+                pixelB = pinkPixel;
+            }
+            for (int x = 0; x < emptyTextureSize; x++) {
+                if (x % 2 == 0) {
+                    emptyTexturePixels[x + (y * emptyTextureSize)] = pixelA;
+                } else {
+                    emptyTexturePixels[x + (y * emptyTextureSize)] = pixelB;
+                }
+            }
+        }
+
         EMPTY_TEXTURE = glGenTextures();
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, EMPTY_TEXTURE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, 2, 2, 0, GL_RGBA, GL_FLOAT, new float[] {
-            1f, 0f, 1f, 1f, 0f, 0f, 0f, 1f,
-            0f, 0f, 0f, 1f, 1f, 0f, 1f, 1f
-        });
+        glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA8,
+                emptyTextureSize,
+                emptyTextureSize,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_INT_8_8_8_8,
+                emptyTexturePixels
+        );
         glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glBindTexture(GL_TEXTURE_2D, 0);
     }
-    
+
     public static final int BRICKS;
     public static final int CONCRETE;
     public static final int GRASS;
     public static final int RED;
-    
+
     static {
         int[] textures = TexturesLoader.load(
                 "bricks.png",
@@ -77,12 +104,12 @@ public class Textures {
         GRASS = textures[2];
         RED = textures[3];
     }
-    
+
     public static void init() {
-        
+
     }
-    
+
     private Textures() {
-        
+
     }
 }
