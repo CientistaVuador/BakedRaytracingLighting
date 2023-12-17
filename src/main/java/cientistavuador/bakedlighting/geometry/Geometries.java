@@ -37,19 +37,24 @@ import java.util.Map;
 public class Geometries {
 
     public static final MeshData[] GARAGE;
+    public static final MeshData CIENCOLA;
     
     static {
-        Map<String, MeshData> garage = GeometriesLoader.load("garage.obj.gz");
-        MeshData bricks = garage.get("garage.obj.gz@bricks");
-        MeshData concrete = garage.get("garage.obj.gz@concrete");
-        MeshData grass = garage.get("garage.obj.gz@grass");
-        MeshData red = garage.get("garage.obj.gz@red");
-        MeshData monkey = garage.get("garage.obj.gz@monkey");
+        Map<String, MeshData> meshes = GeometriesLoader.load("garage.obj.gz", "ciencola.obj");
+        MeshData bricks = meshes.get("garage.obj.gz@bricks");
+        MeshData concrete = meshes.get("garage.obj.gz@concrete");
+        MeshData grass = meshes.get("garage.obj.gz@grass");
+        MeshData red = meshes.get("garage.obj.gz@red");
+        MeshData monkey = meshes.get("garage.obj.gz@monkey");
         bricks.setTextureHint(Textures.BRICKS);
         concrete.setTextureHint(Textures.CONCRETE);
         grass.setTextureHint(Textures.GRASS);
         red.setTextureHint(Textures.RED);
         GARAGE = new MeshData[] {bricks, concrete, grass, red, monkey};
+        
+        MeshData ciencola = meshes.get("ciencola.obj");
+        ciencola.setTextureHint(Textures.CIENCOLA);
+        CIENCOLA = ciencola;
     }
     
     public static void init() {

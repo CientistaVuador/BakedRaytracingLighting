@@ -55,6 +55,65 @@ import org.lwjgl.system.MemoryUtil;
  */
 public class BakedRaytracing {
 
+    public static class Scene {
+        private final List<Geometry> geometries = new ArrayList<>();
+        
+        private final Vector3f sunDirection = new Vector3f(-1f, -0.75f, 0.5f).normalize();
+        private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
+        private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
+        private final Vector3f sunAmbientColor = new Vector3f(0.2f, 0.2f, 0.2f);
+        
+        public Scene() {
+            
+        }
+
+        public List<Geometry> getGeometries() {
+            return geometries;
+        }
+
+        public Vector3fc getSunDirection() {
+            return sunDirection;
+        }
+
+        public Vector3fc getSunDirectionInverted() {
+            return sunDirectionInverted;
+        }
+
+        public Vector3fc getSunDiffuseColor() {
+            return sunDiffuseColor;
+        }
+        
+        public Vector3fc getSunAmbientColor() {
+            return sunAmbientColor;
+        }
+
+        public void setSunDirection(float x, float y, float z) {
+            this.sunDirection.set(x, y, z).normalize();
+            this.sunDirectionInverted.set(this.sunDirection).negate();
+        }
+        
+        public void setSunDiffuseColor(float r, float g, float b) {
+            this.sunDiffuseColor.set(r, g, b);
+        }
+        
+        public void setSunAmbientColor(float r, float g, float b) {
+            this.sunAmbientColor.set(r, g, b);
+        }
+        
+        public void setSunDirection(Vector3fc direction) {
+            setSunDirection(direction.x(), direction.y(), direction.z());
+        }
+        
+        public void setSunDiffuseColor(Vector3fc color) {
+            setSunDiffuseColor(color.x(), color.y(), color.z());
+        }
+        
+        public void setSunAmbientColor(Vector3fc color) {
+            setSunAmbientColor(color.x(), color.y(), color.z());
+        }
+        
+    }
+    
     public static final float PIXEL_OFFSET = 0.5f;
     private static final float[] SAMPLE_POSITIONS = {
         (1f + 0.5f) / 4f, (0f + 0.5f) / 4f,
@@ -187,17 +246,16 @@ public class BakedRaytracing {
 
     }
 
-    private final Geometry[] scene;
+    private Scene scene;
     private final Map<MeshData, SoftwareTexture> sceneTextures = new HashMap<>();
-    private final int maxLightmapSize;
-    private final Vector3f sunDirection;
+    private int lightmapSize;
 
     private float[] areas = null;
     private float largestArea = 0f;
     private float smallestArea = 0f;
 
     private Geometry geometry = null;
-    private int lightmapSize;
+    private int geometryLightmapSize;
     private float[] vertices = null;
     private int[] indices = null;
 
@@ -214,16 +272,18 @@ public class BakedRaytracing {
     private float progressBarStep = 0f;
     private float currentProgress = 0f;
 
-    public BakedRaytracing(Geometry[] scene, int maxLightmapSize, Vector3fc sunDirection) {
-        this.scene = scene;
-        this.maxLightmapSize = maxLightmapSize;
-        this.sunDirection = new Vector3f(sunDirection);
+    public BakedRaytracing() {
+        
     }
 
+    private void prepare(Scene scene, int lightmapSize) {
+        this.scene = scene;
+        this.lightmapSize = lightmapSize;
+    }
+    
     private void waitForBVHs() {
-        setProgressBarStep(this.scene.length);
-        for (int i = 0; i < this.scene.length; i++) {
-            Geometry geo = this.scene[i];
+        setProgressBarStep(this.scene.getGeometries().size());
+        for (Geometry geo:this.scene.getGeometries()) {
             this.currentStatus = "Waiting for BVH to compute (" + geo.getMesh().getName() + ")";
             geo.getMesh().getBVH();
             stepProgressBar();
@@ -231,10 +291,11 @@ public class BakedRaytracing {
     }
 
     private void loadTextures() {
-        setProgressBarStep(this.scene.length);
-        for (int i = 0; i < this.scene.length; i++) {
-            Geometry geo = this.scene[i];
-            this.currentStatus = "Loading Texture (" + i + "/" + this.scene.length + ")";
+        int geometriesLength = this.scene.getGeometries().size();
+        setProgressBarStep(geometriesLength);
+        for (int i = 0; i < geometriesLength; i++) {
+            Geometry geo = this.scene.getGeometries().get(i);
+            this.currentStatus = "Loading Texture (" + i + "/" + geometriesLength + ")";
             SoftwareTexture t = this.sceneTextures.get(geo.getMesh());
             if (t == null) {
                 CompletableFuture<Void> future = new CompletableFuture<>();
@@ -264,11 +325,12 @@ public class BakedRaytracing {
         Vector3f p0 = new Vector3f();
         Vector3f p1 = new Vector3f();
         Vector3f p2 = new Vector3f();
-
-        setProgressBarStep(this.scene.length);
-        this.areas = new float[this.scene.length];
-        for (int i = 0; i < this.scene.length; i++) {
-            Geometry geo = this.scene[i];
+        
+        int geometriesLength = this.scene.getGeometries().size();
+        setProgressBarStep(geometriesLength);
+        this.areas = new float[geometriesLength];
+        for (int i = 0; i < geometriesLength; i++) {
+            Geometry geo = this.scene.getGeometries().get(i);
             this.currentStatus = "Calculating area (" + geo.getMesh().getName() + ")";
             Matrix4fc model = geo.getModel();
 
@@ -317,31 +379,31 @@ public class BakedRaytracing {
     }
 
     private void loadGeometry(int index) {
-        this.geometry = this.scene[index];
+        this.geometry = this.scene.getGeometries().get(index);
 
         this.currentProgress = 0f;
         this.currentStatus = "Loading Geometry...";
 
-        if (this.maxLightmapSize > LightmapUVGenerator.BASE_LIGHTMAP_SIZE) {
+        if (this.lightmapSize > LightmapUVGenerator.BASE_LIGHTMAP_SIZE) {
             float area = this.areas[index];
             area = (area - this.smallestArea) / (this.largestArea - this.smallestArea);
-            area *= this.maxLightmapSize - LightmapUVGenerator.BASE_LIGHTMAP_SIZE;
+            area *= this.lightmapSize - LightmapUVGenerator.BASE_LIGHTMAP_SIZE;
             area += LightmapUVGenerator.BASE_LIGHTMAP_SIZE;
-            this.lightmapSize = (int) Math.pow(2.0, Math.round(Math.log(area) / Math.log(2.0)));
+            this.geometryLightmapSize = (int) Math.pow(2.0, Math.round(Math.log(area) / Math.log(2.0)));
         } else {
-            this.lightmapSize = this.maxLightmapSize;
+            this.geometryLightmapSize = this.lightmapSize;
         }
-        this.lightmapSize = this.maxLightmapSize;
+        this.geometryLightmapSize = this.lightmapSize;
 
         this.vertices = geometry.getMesh().getVertices();
         this.indices = geometry.getMesh().getIndices();
 
-        this.sampleBuffer = new BooleanBuffer(this.lightmapSize);
-        this.indicesBuffer = new IndicesBuffer(this.lightmapSize);
-        this.positionBuffer = new PositionBuffer(this.lightmapSize);
-        this.normalBuffer = new UnitVectorBuffer(this.lightmapSize);
-        this.tangentBuffer = new UnitVectorBuffer(this.lightmapSize);
-        final ByteBuffer output = MemoryUtil.memCalloc(this.lightmapSize * this.lightmapSize * 3);
+        this.sampleBuffer = new BooleanBuffer(this.geometryLightmapSize);
+        this.indicesBuffer = new IndicesBuffer(this.geometryLightmapSize);
+        this.positionBuffer = new PositionBuffer(this.geometryLightmapSize);
+        this.normalBuffer = new UnitVectorBuffer(this.geometryLightmapSize);
+        this.tangentBuffer = new UnitVectorBuffer(this.geometryLightmapSize);
+        final ByteBuffer output = MemoryUtil.memCalloc(this.geometryLightmapSize * this.geometryLightmapSize * 3);
         this.outputBufferCleanable = ObjectCleaner.get().register(output, () -> {
             MemoryUtil.memFree(output);
         });
@@ -423,14 +485,14 @@ public class BakedRaytracing {
             int v1 = (i1 * MeshData.SIZE);
             int v2 = (i2 * MeshData.SIZE);
 
-            float v0x = this.vertices[v0 + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
-            float v0y = this.vertices[v0 + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+            float v0x = this.vertices[v0 + MeshData.L_UV_OFFSET + 0] * this.geometryLightmapSize;
+            float v0y = this.vertices[v0 + MeshData.L_UV_OFFSET + 1] * this.geometryLightmapSize;
 
-            float v1x = this.vertices[v1 + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
-            float v1y = this.vertices[v1 + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+            float v1x = this.vertices[v1 + MeshData.L_UV_OFFSET + 0] * this.geometryLightmapSize;
+            float v1y = this.vertices[v1 + MeshData.L_UV_OFFSET + 1] * this.geometryLightmapSize;
 
-            float v2x = this.vertices[v2 + MeshData.L_UV_OFFSET + 0] * this.lightmapSize;
-            float v2y = this.vertices[v2 + MeshData.L_UV_OFFSET + 1] * this.lightmapSize;
+            float v2x = this.vertices[v2 + MeshData.L_UV_OFFSET + 0] * this.geometryLightmapSize;
+            float v2y = this.vertices[v2 + MeshData.L_UV_OFFSET + 1] * this.geometryLightmapSize;
 
             a.set(v0x, v0y, 0f);
             b.set(v1x, v1y, 0f);
@@ -441,10 +503,10 @@ public class BakedRaytracing {
             int maxX = (int) Math.ceil(Math.max(v0x, Math.max(v1x, v2x)));
             int maxY = (int) Math.ceil(Math.max(v0y, Math.max(v1y, v2y)));
 
-            minX = clamp(minX, 0, this.lightmapSize - 1);
-            minY = clamp(minY, 0, this.lightmapSize - 1);
-            maxX = clamp(maxX, 0, this.lightmapSize - 1);
-            maxY = clamp(maxY, 0, this.lightmapSize - 1);
+            minX = clamp(minX, 0, this.geometryLightmapSize - 1);
+            minY = clamp(minY, 0, this.geometryLightmapSize - 1);
+            maxX = clamp(maxX, 0, this.geometryLightmapSize - 1);
+            maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
 
             float v0Angle = this.vertices[v0 + MeshData.L_UV_ANGLE_OFFSET + 0];
             float v1Angle = this.vertices[v1 + MeshData.L_UV_ANGLE_OFFSET + 0];
@@ -519,16 +581,16 @@ public class BakedRaytracing {
     }
 
     private void bakeLightmap() {
-        setProgressBarStep(this.lightmapSize);
+        setProgressBarStep(this.geometryLightmapSize);
 
         int amountOfCores = Runtime.getRuntime().availableProcessors();
         ExecutorService service = Executors.newFixedThreadPool(amountOfCores);
         List<Future<?>> tasks = new ArrayList<>(amountOfCores);
-        for (int y = 0; y < this.lightmapSize; y += amountOfCores) {
-            this.currentStatus = "Baking (" + y + "/" + this.lightmapSize + ")";
+        for (int y = 0; y < this.geometryLightmapSize; y += amountOfCores) {
+            this.currentStatus = "Baking (" + y + "/" + this.geometryLightmapSize + ")";
             for (int i = 0; i < amountOfCores; i++) {
                 final int line = y + i;
-                if (line >= this.lightmapSize) {
+                if (line >= this.geometryLightmapSize) {
                     break;
                 }
                 tasks.add(service.submit(() -> {
@@ -552,7 +614,7 @@ public class BakedRaytracing {
     }
 
     private void processLine(int y) {
-        byte[] lineColorData = new byte[this.lightmapSize * 3];
+        byte[] lineColorData = new byte[this.geometryLightmapSize * 3];
 
         Vector3i triangle = new Vector3i();
         Vector3f position = new Vector3f();
@@ -563,7 +625,7 @@ public class BakedRaytracing {
         Vector3f colorAverage = new Vector3f();
 
         int lastValidX = -1;
-        for (int x = 0; x < this.lightmapSize; x++) {
+        for (int x = 0; x < this.geometryLightmapSize; x++) {
             colorAverage.zero();
 
             int pixelsProcessed = 0;
@@ -602,12 +664,12 @@ public class BakedRaytracing {
             }
         }
 
-        this.outputBuffer.put(y * this.lightmapSize * 3, lineColorData);
+        this.outputBuffer.put(y * this.geometryLightmapSize * 3, lineColorData);
     }
 
     private void processSample(int pixelX, int pixelY, int sample, Vector3i triangle, Vector3fc position, Vector3fc normal, Vector3fc tangent, Vector3f outColor) {
         float shadow = 1f;
-        RayResult[] results = Geometry.testRay(position, this.sunDirection, this.scene);
+        RayResult[] results = Geometry.testRay(position, this.scene.getSunDirectionInverted(), this.scene.getGeometries());
         for (RayResult r : results) {
             if (r.getDistance() < 0.001f) {
                 continue;
@@ -621,7 +683,7 @@ public class BakedRaytracing {
 
         outColor
                 .set(1.5f, 1.5f, 1.5f)
-                .mul(Math.max(normal.dot(this.sunDirection), 0f))
+                .mul(Math.max(normal.dot(this.scene.getSunDirectionInverted()), 0f))
                 .mul(shadow)
                 .add(0.2f, 0.2f, 0.2f);
     }
@@ -632,7 +694,7 @@ public class BakedRaytracing {
 
         final ByteBuffer outputBufferCopy = this.outputBuffer;
         final Cleaner.Cleanable outputBufferCleanableCopy = this.outputBufferCleanable;
-        final int lightmapSizeCopy = this.lightmapSize;
+        final int lightmapSizeCopy = this.geometryLightmapSize;
         final Geometry geometryCopy = this.geometry;
 
         Main.MAIN_TASKS.add(() -> {
@@ -672,6 +734,10 @@ public class BakedRaytracing {
         this.tangentBuffer = null;
         this.outputBufferCleanable = null;
         this.outputBuffer = null;
+        this.sceneTextures.clear();
+        this.scene = null;
+        this.lightmapSize = 0;
+        this.processingTask = null;
     }
 
     public String getCurrentStatus() {
@@ -706,8 +772,12 @@ public class BakedRaytracing {
         return this.processingTask.isDone();
     }
 
-    public boolean isProcessing() {
+    public boolean isRunning() {
         return this.processingTask != null;
+    }
+    
+    public boolean hasError() {
+        return isDone() && isRunning();
     }
 
     private void setProgressBarStep(float max) {
@@ -723,15 +793,16 @@ public class BakedRaytracing {
         this.currentProgress += this.progressBarStep;
     }
 
-    public void beginProcessing() {
+    public void bake(Scene scene, int lightmapSize) {
         if (this.processingTask != null) {
             return;
         }
         this.processingTask = CompletableFuture.runAsync(() -> {
+            prepare(scene, lightmapSize);
             waitForBVHs();
             loadTextures();
             calculateAreas();
-            for (int i = 0; i < this.scene.length; i++) {
+            for (int i = 0; i < this.scene.getGeometries().size(); i++) {
                 loadGeometry(i);
                 computeBuffers();
                 bakeLightmap();
@@ -741,7 +812,7 @@ public class BakedRaytracing {
         });
     }
 
-    public void finishProcessing() {
+    public void finish() {
         if (this.processingTask == null) {
             return;
         }

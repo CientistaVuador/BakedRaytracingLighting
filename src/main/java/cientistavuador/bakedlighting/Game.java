@@ -59,16 +59,16 @@ public class Game {
     }
 
     private final FreeCamera camera = new FreeCamera();
-    private final Geometry[] geometries = new Geometry[Geometries.GARAGE.length];
     private RayResult ray = null;
-    private final BakedRaytracing baked = new BakedRaytracing(geometries, 128, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
+    private final BakedRaytracing.Scene scene = new BakedRaytracing.Scene();
+    private final BakedRaytracing baked = new BakedRaytracing();
 
     private Game() {
 
     }
 
     public void start() {
-        camera.setPosition(0, 8f, 16f);
+        camera.setPosition(1f, 3f, -5f);
         camera.setUBO(CameraUBO.create(UBOBindingPoints.PLAYER_CAMERA));
 
         GeometryProgram program = GeometryProgram.INSTANCE;
@@ -82,9 +82,29 @@ public class Game {
         program.setLightingEnabled(true);
         glUseProgram(0);
 
-        for (int i = 0; i < geometries.length; i++) {
-            geometries[i] = new Geometry(Geometries.GARAGE[i]);
+        for (int i = 0; i < Geometries.GARAGE.length; i++) {
+            this.scene.getGeometries().add(new Geometry(Geometries.GARAGE[i]));
         }
+
+        Geometry ciencola = new Geometry(Geometries.CIENCOLA);
+        this.scene.getGeometries().add(ciencola);
+
+        Matrix4f matrix = new Matrix4f()
+                .translate(-4f, 2f, -2f)
+                .scale(1f, 1.2f, 1f)
+                .rotateZ((float) Math.toRadians(45f));
+
+        ciencola.setModel(matrix);
+
+        ciencola = new Geometry(Geometries.CIENCOLA);
+        this.scene.getGeometries().add(ciencola);
+
+        matrix = new Matrix4f()
+                .translate(0f, 0.595f, -5f)
+                .scale(1f, 1.2f, 1f)
+                .scale(0.10f);
+
+        ciencola.setModel(matrix);
     }
 
     public void loop() {
@@ -103,13 +123,13 @@ public class Game {
         program.setTextureUnit(0);
         program.setLightmapTextureUnit(1);
         program.setLightingEnabled(false);
-        for (int i = 0; i < geometries.length; i++) {
+        for (Geometry geo : this.scene.getGeometries()) {
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, geometries[i].getMesh().getTextureHint());
+            glBindTexture(GL_TEXTURE_2D, geo.getMesh().getTextureHint());
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, geometries[i].getLightmapTextureHint());
-            program.setModel(geometries[i].getModel());
-            geometries[i].getMesh().bindRenderUnbind();
+            glBindTexture(GL_TEXTURE_2D, geo.getLightmapTextureHint());
+            program.setModel(geo.getModel());
+            geo.getMesh().bindRenderUnbind();
         }
         glUseProgram(0);
 
@@ -145,7 +165,7 @@ public class Game {
 
             DebugCounter c = new DebugCounter();
             c.markStart("ray");
-            RayResult[] result = Geometry.testRay(origin, direction, geometries);
+            RayResult[] result = Geometry.testRay(origin, direction, this.scene.getGeometries());
             if (result.length != 0) {
                 this.ray = result[0];
             }
@@ -154,16 +174,16 @@ public class Game {
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
             if (this.baked.isDone()) {
-                this.baked.finishProcessing();
+                this.baked.finish();
             }
-            if (!this.baked.isProcessing()) {
-                for (Geometry geo : this.geometries) {
+            if (!this.baked.isRunning()) {
+                for (Geometry geo : this.scene.getGeometries()) {
                     if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP_TEXTURE) {
                         glDeleteTextures(geo.getLightmapTextureHint());
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.baked.beginProcessing();
+                this.baked.bake(this.scene, 512);
             }
         }
     }

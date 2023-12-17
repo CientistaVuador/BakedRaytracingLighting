@@ -104,18 +104,21 @@ public class Textures {
     public static final int CONCRETE;
     public static final int GRASS;
     public static final int RED;
+    public static final int CIENCOLA;
 
     static {
         int[] textures = TexturesLoader.load(
                 "bricks.png",
                 "concrete.png",
                 "grass.png",
-                "red.png"
+                "red.png",
+                "ciencola_diffuse_512.png"
         );
         BRICKS = textures[0];
         CONCRETE = textures[1];
         GRASS = textures[2];
         RED = textures[3];
+        CIENCOLA = textures[4];
     }
 
     public static void init() {

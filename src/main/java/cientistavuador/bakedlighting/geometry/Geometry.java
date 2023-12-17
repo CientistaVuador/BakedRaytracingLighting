@@ -46,8 +46,8 @@ import org.joml.Vector3fc;
  */
 public class Geometry {
     
-    public static RayResult[] testRay(Vector3fc origin, Vector3fc direction, Geometry... geometries) {
-        if (geometries.length == 0) {
+    public static RayResult[] testRay(Vector3fc origin, Vector3fc direction, List<Geometry> geometries) {
+        if (geometries.isEmpty()) {
             return new RayResult[0];
         }
         Vector3f transformedOrigin = new Vector3f();
@@ -66,6 +66,10 @@ public class Geometry {
         RayResult[] array = rays.toArray(RayResult[]::new);
         Arrays.sort(array);
         return array;
+    }
+    
+    public static RayResult[] testRay(Vector3fc origin, Vector3fc direction, Geometry... geometries) {
+        return testRay(origin, direction, Arrays.asList(geometries));
     }
     
     private final MeshData mesh;
