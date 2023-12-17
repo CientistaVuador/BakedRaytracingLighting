@@ -44,6 +44,8 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.joml.Vector3i;
+import org.lwjgl.opengl.EXTTextureCompressionS3TC;
+import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL33C.*;
 import org.lwjgl.system.MemoryUtil;
 
@@ -329,6 +331,7 @@ public class BakedRaytracing {
         } else {
             this.lightmapSize = this.maxLightmapSize;
         }
+        this.lightmapSize = this.maxLightmapSize;
 
         this.vertices = geometry.getMesh().getVertices();
         this.indices = geometry.getMesh().getIndices();
@@ -636,7 +639,12 @@ public class BakedRaytracing {
             int texture = glGenTextures();
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, lightmapSizeCopy, lightmapSizeCopy, 0, GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy);
+            
+            int internalFormat = GL_RGB8;
+            if (GL.getCapabilities().GL_EXT_texture_compression_s3tc) {
+                internalFormat = EXTTextureCompressionS3TC.GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+            }
+            glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, lightmapSizeCopy, lightmapSizeCopy, 0, GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy);
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

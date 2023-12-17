@@ -26,7 +26,10 @@
  */
 package cientistavuador.bakedlighting.texture;
 
+import cientistavuador.bakedlighting.Main;
+import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL33C.*;
+import org.lwjgl.opengl.KHRDebug;
 
 /**
  *
@@ -45,8 +48,13 @@ public class Textures {
         glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glBindTexture(GL_TEXTURE_2D, 0);
 
+        if (Main.DEBUG_ENABLED && GL.getCapabilities().GL_KHR_debug) {
+            KHRDebug.glObjectLabel(GL_TEXTURE, EMPTY_LIGHTMAP_TEXTURE, "Empty Lightmap Texture");
+        }
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        
         int blackPixel = 0x00_00_00_FF;
         int pinkPixel = 0xFF_00_FF_FF;
         int emptyTextureSize = 64;
@@ -84,6 +92,11 @@ public class Textures {
         glGenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        
+        if (Main.DEBUG_ENABLED && GL.getCapabilities().GL_KHR_debug) {
+            KHRDebug.glObjectLabel(GL_TEXTURE, EMPTY_TEXTURE, "Empty/Error Texture");
+        }
+        
         glBindTexture(GL_TEXTURE_2D, 0);
     }
 

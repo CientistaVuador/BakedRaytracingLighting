@@ -42,7 +42,6 @@ import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedRaytracing;
 import cientistavuador.bakedlighting.util.RayResult;
 import org.joml.Matrix4f;
-import org.joml.Vector2f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
@@ -65,13 +64,13 @@ public class Game {
     private final BakedRaytracing baked = new BakedRaytracing(geometries, 128, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
 
     private Game() {
-        
+
     }
 
     public void start() {
         camera.setPosition(0, 8f, 16f);
         camera.setUBO(CameraUBO.create(UBOBindingPoints.PLAYER_CAMERA));
-        
+
         GeometryProgram program = GeometryProgram.INSTANCE;
         program.use();
         program.setModel(new Matrix4f());
@@ -87,7 +86,7 @@ public class Game {
             geometries[i] = new Geometry(Geometries.GARAGE[i]);
         }
     }
-    
+
     public void loop() {
         if (ray != null) {
             LineRender.queueRender(ray.getOrigin(), ray.getHitpoint());
@@ -119,13 +118,13 @@ public class Game {
 
         String[] text = new String[]{
             new StringBuilder()
-                    .append("R - Bake Lightmap\n")
-                    .append(this.baked.getCurrentProgressBar()).append('\n')
-                    .append("Status: ").append(this.baked.getCurrentStatus()).append('\n')
-                    .toString()
+            .append("R - Bake Lightmap\n")
+            .append(this.baked.getCurrentProgressBar()).append('\n')
+            .append("Status: ").append(this.baked.getCurrentStatus()).append('\n')
+            .toString()
         };
-        GLFontRenderer.render(-0.795f, -0.605f, new GLFontSpecification[] {GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
-        GLFontRenderer.render(-0.80f, -0.60f, new GLFontSpecification[] {GLFontSpecifications.SPACE_MONO_REGULAR_0_04_WHITE}, text);
+        GLFontRenderer.render(-0.795f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
+        GLFontRenderer.render(-0.80f, -0.60f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_WHITE}, text);
 
         Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";
         Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
@@ -154,16 +153,16 @@ public class Game {
             c.print();
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-            for (Geometry geo:this.geometries) {
-                if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP_TEXTURE) {
-                    glDeleteTextures(geo.getLightmapTextureHint());
-                    geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
-                }
-            }
             if (this.baked.isDone()) {
                 this.baked.finishProcessing();
             }
             if (!this.baked.isProcessing()) {
+                for (Geometry geo : this.geometries) {
+                    if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP_TEXTURE) {
+                        glDeleteTextures(geo.getLightmapTextureHint());
+                        geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
+                    }
+                }
                 this.baked.beginProcessing();
             }
         }

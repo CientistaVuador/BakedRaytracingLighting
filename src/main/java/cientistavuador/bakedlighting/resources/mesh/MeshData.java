@@ -32,7 +32,9 @@ import cientistavuador.bakedlighting.util.BVH;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL33C.*;
+import org.lwjgl.opengl.KHRDebug;
 
 /**
  *
@@ -103,11 +105,11 @@ public class MeshData {
             glBindVertexArray(this.vao);
 
             this.ebo = glGenBuffers();
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this.ebo);
             glBufferData(GL_ELEMENT_ARRAY_BUFFER, getIndices(), GL_STATIC_DRAW);
 
             this.vbo = glGenBuffers();
-            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
             glBufferData(GL_ARRAY_BUFFER, getVertices(), GL_STATIC_DRAW);
 
             //position
@@ -135,7 +137,11 @@ public class MeshData {
             glVertexAttribPointer(5, 1, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (L_UV_ANGLE_OFFSET * Float.BYTES));
             
             glBindBuffer(GL_ARRAY_BUFFER, 0);
-
+            
+            if (Main.DEBUG_ENABLED && GL.getCapabilities().GL_KHR_debug) {
+                KHRDebug.glObjectLabel(GL_VERTEX_ARRAY, this.vao, "Mesh_" + getName());
+            }
+            
             glBindVertexArray(0);
         }
         return this.vao;

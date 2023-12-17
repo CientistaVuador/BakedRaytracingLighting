@@ -44,11 +44,12 @@ public class Geometries {
         MeshData concrete = garage.get("garage.obj.gz@concrete");
         MeshData grass = garage.get("garage.obj.gz@grass");
         MeshData red = garage.get("garage.obj.gz@red");
+        MeshData monkey = garage.get("garage.obj.gz@monkey");
         bricks.setTextureHint(Textures.BRICKS);
         concrete.setTextureHint(Textures.CONCRETE);
         grass.setTextureHint(Textures.GRASS);
         red.setTextureHint(Textures.RED);
-        GARAGE = new MeshData[] {bricks, concrete, grass, red};
+        GARAGE = new MeshData[] {bricks, concrete, grass, red, monkey};
     }
     
     public static void init() {

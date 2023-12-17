@@ -302,7 +302,6 @@ public class GeometryProgram {
     
     private static final BetterUniformSetter UNIFORMS = new BetterUniformSetter(SHADER_PROGRAM);
     public static final GeometryProgram INSTANCE = new GeometryProgram();
-    public static final int EMPTY_LIGHTMAP = glGenTextures();
     
     private final Matrix4f projectionView = new Matrix4f();
     private final Matrix4f model = new Matrix4f();
