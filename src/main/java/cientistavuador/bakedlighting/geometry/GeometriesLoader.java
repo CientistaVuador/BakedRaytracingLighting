@@ -70,7 +70,7 @@ public class GeometriesLoader {
                 MeshData[] e = MeshResources.load(names[index]);
                 if (DEBUG_OUTPUT) {
                     for (MeshData m : e) {
-                        System.out.println("Finished loading geometry '" + m.getName() + ": " + (m.getVertices().length / MeshData.SIZE) + " vertices, " + m.getIndices().length + " indices, lightmap size hint: " + m.getLightmapSizeHint() + "x" + m.getLightmapSizeHint());
+                        System.out.println("Finished loading geometry '" + m.getName() + ": " + (m.getVertices().length / MeshData.SIZE) + " vertices, " + m.getIndices().length + " indices");
                     }
                 }
                 return e;

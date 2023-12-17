@@ -29,6 +29,7 @@ package cientistavuador.bakedlighting.util;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import org.joml.Vector2f;
 
 /**
  *
@@ -200,7 +201,7 @@ public class MeshUtils {
         );
     }
     
-    public static int generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int outLightmapUV) {
+    public static void generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int outLightmapUV, int outLightmapUVAngle) {
         if (vertices.length % vertexSize != 0) {
             throw new IllegalArgumentException("Wrong size.");
         }
@@ -208,9 +209,9 @@ public class MeshUtils {
             throw new IllegalArgumentException("Not a triangulated mesh.");
         }
         if (vertices.length == 0) {
-            return LightmapUVGenerator.BASE_LIGHTMAP_SIZE;
+            return;
         }
-        return new LightmapUVGenerator(vertices, vertexSize, xyzOffset, outLightmapUV).process();
+        new LightmapUVGenerator(vertices, vertexSize, xyzOffset, outLightmapUV, outLightmapUVAngle).process();
     }
     
     private MeshUtils() {

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import org.joml.Vector2f;
 
 /**
  *
@@ -89,7 +90,6 @@ public class LightmapUVGenerator {
 
         float width;
         float height;
-        float margin;
         float x;
         float y;
 
@@ -130,6 +130,7 @@ public class LightmapUVGenerator {
     private final int vertexSize;
     private final int xyzOffset;
     private final int outUVOffset;
+    private final int outUVAngleOffset;
 
     private final Map<Vertex, List<Vertex>> mappedVertices = new HashMap<>();
 
@@ -148,13 +149,12 @@ public class LightmapUVGenerator {
     private float totalWidth = 0f;
     private float totalHeight = 0f;
 
-    private int highestInternalResolution = BASE_LIGHTMAP_SIZE;
-
-    public LightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, int outUVOffset) {
+    public LightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, int outUVOffset, int outUVAngleOffset) {
         this.vertices = vertices;
         this.vertexSize = vertexSize;
         this.xyzOffset = xyzOffset;
         this.outUVOffset = outUVOffset;
+        this.outUVAngleOffset = outUVAngleOffset;
     }
 
     private void mapVertices() {
@@ -376,6 +376,22 @@ public class LightmapUVGenerator {
                 group.quads.add(e);
             }
 
+            int closestPotSize = (int) Math.pow(2.0, Math.floor(Math.log(group.quads.size()) / Math.log(2.0)));
+
+            if (closestPotSize != group.quads.size()) {
+                List<Quad> accepted = new ArrayList<>();
+                for (int i = 0; i < group.quads.size(); i++) {
+                    Quad e = group.quads.get(i);
+                    if (i < closestPotSize) {
+                        accepted.add(e);
+                    } else {
+                        e.grouped = false;
+                    }
+                }
+                group.quads.clear();
+                group.quads.addAll(accepted);
+            }
+
             group.width = width;
             group.height = height;
             group.level = (int) (Math.floor(Math.log(Math.sqrt(group.width * group.height)) / Math.log(2.0)));
@@ -585,7 +601,6 @@ public class LightmapUVGenerator {
                 float size = q.size;
                 List<Quad> quadsList = q.quads.quads;
                 float heightPerQuad = size / quadsList.size();
-
                 for (int i = 0; i < quadsList.size(); i++) {
                     Quad quad = quadsList.get(i);
                     quad.width = size;
@@ -635,52 +650,66 @@ public class LightmapUVGenerator {
         this.totalHeight = size;
     }
 
-    private void calculateMargin() {
-        for (Quad q : this.quads) {
-            float internalResolution = 1f;
-            float width = q.width * internalResolution;
-            float height = q.height * internalResolution;
-            while ((width - 2f) < MINIMUM_TRIANGLE_SIZE && (height - 2f) < MINIMUM_TRIANGLE_SIZE) {
-                internalResolution *= 2f;
-                width *= 2f;
-                height *= 2f;
-            }
-            q.margin = 1f / internalResolution;
-            this.highestInternalResolution = Math.max(this.highestInternalResolution, (int) internalResolution);
-        }
-    }
-
     private void outputUVs() {
+        Vector2f bottomLeft = new Vector2f(1f, 1f).normalize();
+        Vector2f bottomRight = new Vector2f(-1f, 1f).normalize();
+        Vector2f topLeft = new Vector2f(1f, -1f).normalize();
+        Vector2f topRight = new Vector2f(-1f, -1f).normalize();
+
+        float bottomLeftAngle = (float) Math.atan2(bottomLeft.y(), bottomLeft.x());
+        float bottomRightAngle = (float) Math.atan2(bottomRight.y(), bottomRight.x());
+        float topLeftAngle = (float) Math.atan2(topLeft.y(), topLeft.x());
+        float topRightAngle = (float) Math.atan2(topRight.y(), topRight.x());
+
+        Vector2f vert0 = new Vector2f();
+        Vector2f vert1 = new Vector2f();
+        Vector2f vert2 = new Vector2f();
+        
+        Vector2f direction = new Vector2f();
+        
         for (Quad q : this.quads) {
             float invLightmapSize = 1f / BASE_LIGHTMAP_SIZE;
 
-            float v0u = q.x + q.margin;
-            float v0v = q.y + q.margin;
+            float minU = q.x;
+            float minV = q.y;
+            float maxU = q.x + q.width;
+            float maxV = q.y + q.height;
 
-            float v1u = (q.x + q.width) - q.margin;
-            float v1v = q.y + q.margin;
+            float v0u = minU;
+            float v0v = minV;
 
-            float v2u = q.x + q.margin;
-            float v2v = (q.y + q.height) - q.margin;
+            float v1u = maxU;
+            float v1v = minV;
 
-            this.vertices[q.v0 + this.outUVOffset + 0] = v0u * invLightmapSize;
-            this.vertices[q.v0 + this.outUVOffset + 1] = v0v * invLightmapSize;
+            float v2u = minU;
+            float v2v = maxV;
+            
+            vert0.set(v0u, v0v).mul(invLightmapSize);
+            vert1.set(v1u, v1v).mul(invLightmapSize);
+            vert2.set(v2u, v2v).mul(invLightmapSize);
+            
+            this.vertices[q.v0 + this.outUVOffset + 0] = vert0.x();
+            this.vertices[q.v0 + this.outUVOffset + 1] = vert0.y();
 
-            this.vertices[q.v1 + this.outUVOffset + 0] = v1u * invLightmapSize;
-            this.vertices[q.v1 + this.outUVOffset + 1] = v1v * invLightmapSize;
+            this.vertices[q.v1 + this.outUVOffset + 0] = vert1.x();
+            this.vertices[q.v1 + this.outUVOffset + 1] = vert1.y();
 
-            this.vertices[q.v2 + this.outUVOffset + 0] = v2u * invLightmapSize;
-            this.vertices[q.v2 + this.outUVOffset + 1] = v2v * invLightmapSize;
+            this.vertices[q.v2 + this.outUVOffset + 0] = vert2.x();
+            this.vertices[q.v2 + this.outUVOffset + 1] = vert2.y();
 
             if (q.secondTriangle) {
-                v0u = (q.x + q.width) - q.margin;
-                v0v = q.y + q.margin;
+                this.vertices[q.v0 + this.outUVAngleOffset + 0] = bottomLeftAngle;
+                this.vertices[q.v1 + this.outUVAngleOffset + 0] = bottomRightAngle;
+                this.vertices[q.v2 + this.outUVAngleOffset + 0] = topLeftAngle;
 
-                v1u = (q.x + q.width) - q.margin;
-                v1v = (q.y + q.height) - q.margin;
+                v0u = maxU;
+                v0v = minV;
 
-                v2u = q.x + q.margin;
-                v2v = (q.y + q.height) - q.margin;
+                v1u = maxU;
+                v1v = maxV;
+
+                v2u = minU;
+                v2v = maxV;
 
                 this.vertices[q.sv0 + this.outUVOffset + 0] = v0u * invLightmapSize;
                 this.vertices[q.sv0 + this.outUVOffset + 1] = v0v * invLightmapSize;
@@ -690,11 +719,31 @@ public class LightmapUVGenerator {
 
                 this.vertices[q.sv2 + this.outUVOffset + 0] = v2u * invLightmapSize;
                 this.vertices[q.sv2 + this.outUVOffset + 1] = v2v * invLightmapSize;
+
+                this.vertices[q.sv0 + this.outUVAngleOffset + 0] = bottomRightAngle;
+                this.vertices[q.sv1 + this.outUVAngleOffset + 0] = topRightAngle;
+                this.vertices[q.sv2 + this.outUVAngleOffset + 0] = topLeftAngle;
+            } else {
+                float cX = (vert0.x()/3f) + (vert1.x()/3f) + (vert2.x()/3f);
+                float cY = (vert0.y()/3f) + (vert1.y()/3f) + (vert2.y()/3f);
+                
+                direction.set(cX, cY).sub(vert0).normalize();
+                float v0Angle = (float) Math.atan2(direction.y(), direction.x());
+                
+                direction.set(cX, cY).sub(vert1).normalize();
+                float v1Angle = (float) Math.atan2(direction.y(), direction.x());
+                
+                direction.set(cX, cY).sub(vert2).normalize();
+                float v2Angle = (float) Math.atan2(direction.y(), direction.x());
+                
+                this.vertices[q.v0 + this.outUVAngleOffset + 0] = v0Angle;
+                this.vertices[q.v1 + this.outUVAngleOffset + 0] = v1Angle;
+                this.vertices[q.v2 + this.outUVAngleOffset + 0] = v2Angle;
             }
         }
     }
 
-    public int process() {
+    public void process() {
         mapVertices();
         mapQuads();
         calculateQuadAreas();
@@ -705,9 +754,7 @@ public class LightmapUVGenerator {
         translateQuadTrees();
         ungroupQuadTrees();
         fitQuads();
-        calculateMargin();
         outputUVs();
-        return this.highestInternalResolution;
     }
 
 }

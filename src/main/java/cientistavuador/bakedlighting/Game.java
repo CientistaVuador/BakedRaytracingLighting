@@ -36,11 +36,13 @@ import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.text.GLFontRenderer;
 import cientistavuador.bakedlighting.text.GLFontSpecification;
 import cientistavuador.bakedlighting.text.GLFontSpecifications;
+import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedRaytracing;
 import cientistavuador.bakedlighting.util.RayResult;
 import org.joml.Matrix4f;
+import org.joml.Vector2f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
@@ -60,16 +62,16 @@ public class Game {
     private final FreeCamera camera = new FreeCamera();
     private final Geometry[] geometries = new Geometry[Geometries.GARAGE.length];
     private RayResult ray = null;
-    private final BakedRaytracing baked = new BakedRaytracing(geometries, 512, true, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
+    private final BakedRaytracing baked = new BakedRaytracing(geometries, 128, new Vector3f(-1f, -0.75f, 0.5f).normalize().negate());
 
     private Game() {
-
+        
     }
 
     public void start() {
         camera.setPosition(0, 8f, 16f);
         camera.setUBO(CameraUBO.create(UBOBindingPoints.PLAYER_CAMERA));
-
+        
         GeometryProgram program = GeometryProgram.INSTANCE;
         program.use();
         program.setModel(new Matrix4f());
@@ -152,6 +154,12 @@ public class Game {
             c.print();
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
+            for (Geometry geo:this.geometries) {
+                if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP_TEXTURE) {
+                    glDeleteTextures(geo.getLightmapTextureHint());
+                    geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
+                }
+            }
             if (this.baked.isDone()) {
                 this.baked.finishProcessing();
             }

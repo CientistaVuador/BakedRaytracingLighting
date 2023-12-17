@@ -40,14 +40,15 @@ import static org.lwjgl.opengl.GL33C.*;
  */
 public class MeshData {
 
-    //position (vec3), texture uv (vec2), normal (vec3), tangent (vec3), lightmap uv (vec2)
-    public static final int SIZE = 3 + 2 + 3 + 3 + 2;
+    //position (vec3), texture uv (vec2), normal (vec3), tangent (vec3), lightmap uv (vec2), lightmap uv angle (float)
+    public static final int SIZE = 3 + 2 + 3 + 3 + 2 + 1;
     
     public static final int XYZ_OFFSET = 0;
     public static final int UV_OFFSET = 0 + 3;
     public static final int N_XYZ_OFFSET = 0 + 3 + 2;
     public static final int T_XYZ_OFFSET = 0 + 3 + 2 + 3;
     public static final int L_UV_OFFSET = 0 + 3 + 2 + 3 + 3;
+    public static final int L_UV_ANGLE_OFFSET = 0 + 3 + 2 + 3 + 3 + 2;
     
     private final String name;
     private final float[] vertices;
@@ -58,20 +59,14 @@ public class MeshData {
     private int ebo = 0;
     private int vbo = 0;
     private int textureHint = Textures.EMPTY_TEXTURE;
-    private final int lightmapSizeHint;
 
-    public MeshData(String name, float[] vertices, int[] indices, int lightmapSizeHint) {
+    public MeshData(String name, float[] vertices, int[] indices) {
         this.name = name;
         this.vertices = vertices;
         this.indices = indices;
         this.futureBvh = CompletableFuture.supplyAsync(() -> {
             return BVH.createAlternative(vertices, MeshData.SIZE, MeshData.XYZ_OFFSET, indices);
         });
-        this.lightmapSizeHint = lightmapSizeHint;
-    }
-
-    public int getLightmapSizeHint() {
-        return lightmapSizeHint;
     }
     
     public String getName() {
@@ -134,6 +129,10 @@ public class MeshData {
             //lightmap uv
             glEnableVertexAttribArray(4);
             glVertexAttribPointer(4, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (L_UV_OFFSET * Float.BYTES));
+            
+            //lightmap uv angle
+            glEnableVertexAttribArray(5);
+            glVertexAttribPointer(5, 1, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (L_UV_ANGLE_OFFSET * Float.BYTES));
             
             glBindBuffer(GL_ARRAY_BUFFER, 0);
 
