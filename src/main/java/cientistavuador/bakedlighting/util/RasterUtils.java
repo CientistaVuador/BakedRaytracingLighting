@@ -36,17 +36,32 @@ import org.joml.Vector3fc;
 public class RasterUtils {
     
     public static void barycentricWeights(Vector3fc p, Vector3fc a, Vector3fc b, Vector3fc c, Vector3f outWeights) {
-        float v0x = b.x() - a.x();
-        float v0y = b.y() - a.y();
-        float v0z = b.z() - a.z();
+        barycentricWeights(
+                p.x(), p.y(), p.z(),
+                a.x(), a.y(), a.z(),
+                b.x(), b.y(), b.z(),
+                c.x(), c.y(), c.z(),
+                outWeights);
+    }
+    
+    public static void barycentricWeights(
+            float pX, float pY, float pZ,
+            float aX, float aY, float aZ,
+            float bX, float bY, float bZ,
+            float cX, float cY, float cZ,
+            Vector3f outWeights
+    ) {
+        float v0x = bX - aX;
+        float v0y = bY - aY;
+        float v0z = bZ - aZ;
         
-        float v1x = c.x() - a.x();
-        float v1y = c.y() - a.y();
-        float v1z = c.z() - a.z();
+        float v1x = cX - aX;
+        float v1y = cY - aY;
+        float v1z = cZ - aZ;
         
-        float v2x = p.x() - a.x();
-        float v2y = p.y() - a.y();
-        float v2z = p.z() - a.z();
+        float v2x = pX - aX;
+        float v2y = pY - aY;
+        float v2z = pZ - aZ;
         
         float d00 = dot(v0x, v0y, v0z, v0x, v0y, v0z);
         float d01 = dot(v0x, v0y, v0z, v1x, v1y, v1z);

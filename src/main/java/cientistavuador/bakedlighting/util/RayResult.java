@@ -27,6 +27,7 @@
 package cientistavuador.bakedlighting.util;
 
 import cientistavuador.bakedlighting.geometry.Geometry;
+import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
@@ -80,6 +81,36 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
 
     public float getDistance() {
         return distance;
+    }
+    
+    public void weights(Vector3f weights) {
+        float[] vertices = this.geometry.getMesh().getVertices();
+        
+        int v0 = (i0() * MeshData.SIZE) + MeshData.XYZ_OFFSET;
+        int v1 = (i1() * MeshData.SIZE) + MeshData.XYZ_OFFSET;
+        int v2 = (i2() * MeshData.SIZE) + MeshData.XYZ_OFFSET;
+        
+        float v0x = vertices[v0 + 0];
+        float v0y = vertices[v0 + 1];
+        float v0z = vertices[v0 + 2];
+        
+        float v1x = vertices[v1 + 0];
+        float v1y = vertices[v1 + 1];
+        float v1z = vertices[v1 + 2];
+        
+        float v2x = vertices[v2 + 0];
+        float v2y = vertices[v2 + 1];
+        float v2z = vertices[v2 + 2];
+        
+        Vector3fc localHitpoint = getLocalHitpoint();
+        
+        RasterUtils.barycentricWeights(
+                localHitpoint.x(), localHitpoint.y(), localHitpoint.z(),
+                v0x, v0y, v0z,
+                v1x, v1y, v1z,
+                v2x, v2y, v2z,
+                weights
+        );
     }
     
     @Override

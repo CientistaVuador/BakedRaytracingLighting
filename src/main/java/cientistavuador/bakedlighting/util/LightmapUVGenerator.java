@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import org.joml.Vector2f;
+import org.joml.Vector4f;
+import org.joml.Vector4i;
 
 /**
  *
@@ -170,67 +172,122 @@ public class LightmapUVGenerator {
         }
     }
 
-    private void setToLargerSideAndCalculateArea(Quad q) {
-        float v0x = vertices[q.v0 + this.xyzOffset + 0];
-        float v0y = vertices[q.v0 + this.xyzOffset + 1];
-        float v0z = vertices[q.v0 + this.xyzOffset + 2];
+    private void findSideTriangle(int va, int vb, Vector4i output) {
+        int striangle = -1;
 
-        float v1x = vertices[q.v1 + this.xyzOffset + 0];
-        float v1y = vertices[q.v1 + this.xyzOffset + 1];
-        float v1z = vertices[q.v1 + this.xyzOffset + 2];
+        Vertex e = new Vertex();
+        e.vertex = va;
+        List<Vertex> vaVertices = this.mappedVertices.get(e);
+        e.vertex = vb;
+        List<Vertex> vbVertices = this.mappedVertices.get(e);
 
-        float v2x = vertices[q.v2 + this.xyzOffset + 0];
-        float v2y = vertices[q.v2 + this.xyzOffset + 1];
-        float v2z = vertices[q.v2 + this.xyzOffset + 2];
+        int sv0 = -1;
+        int sv1 = -1;
+        int sv2 = -1;
+
+        searchTriangle:
+        for (Vertex vav : vaVertices) {
+            int currentTriangle = (vav.vertex / this.vertexSize) / 3;
+            if (this.processedTriangles.contains(currentTriangle)) {
+                continue;
+            }
+            sv0 = vav.vertex;
+            for (Vertex vbv : vbVertices) {
+                int otherTriangle = (vbv.vertex / this.vertexSize) / 3;
+                if (otherTriangle == currentTriangle) {
+                    sv2 = vbv.vertex;
+                    striangle = currentTriangle;
+                    break searchTriangle;
+                }
+            }
+        }
+
+        if (striangle != -1) {
+            for (int i = 0; i < 3; i++) {
+                int r = (striangle * 3 * this.vertexSize) + (this.vertexSize * i);
+                if (r != sv0 && r != sv2) {
+                    sv1 = r;
+                    break;
+                }
+            }
+
+            output.set(sv0, sv1, sv2, striangle);
+            return;
+        }
+        output.set(-1, -1, -1, -1);
+    }
+
+    private void calculateArea(Vector4i triangle, Vector4f output) {
+        int v0 = triangle.x();
+        int v1 = triangle.y();
+        int v2 = triangle.z();
+
+        float v0x = this.vertices[v0 + this.xyzOffset + 0];
+        float v0y = this.vertices[v0 + this.xyzOffset + 1];
+        float v0z = this.vertices[v0 + this.xyzOffset + 2];
+
+        float v1x = this.vertices[v1 + this.xyzOffset + 0];
+        float v1y = this.vertices[v1 + this.xyzOffset + 1];
+        float v1z = this.vertices[v1 + this.xyzOffset + 2];
+
+        float v2x = this.vertices[v2 + this.xyzOffset + 0];
+        float v2y = this.vertices[v2 + this.xyzOffset + 1];
+        float v2z = this.vertices[v2 + this.xyzOffset + 2];
 
         float a = (float) Math.sqrt(Math.pow(v0x - v1x, 2.0) + Math.pow(v0y - v1y, 2.0) + Math.pow(v0z - v1z, 2.0));
         float b = (float) Math.sqrt(Math.pow(v1x - v2x, 2.0) + Math.pow(v1y - v2y, 2.0) + Math.pow(v1z - v2z, 2.0));
         float c = (float) Math.sqrt(Math.pow(v2x - v0x, 2.0) + Math.pow(v2y - v0y, 2.0) + Math.pow(v2z - v0z, 2.0));
 
-        float storeA;
-        float storeC;
+        float aSquare = a * a;
+        float bSquare = b * b;
+        float cSquare = c * c;
+        float abcSquare = (aSquare + bSquare - cSquare);
+        abcSquare *= abcSquare;
 
-        int v0 = q.v2;
-        int v1 = q.v0;
-        int v2 = q.v1;
-        storeA = c;
-        storeC = b;
-        float largerSide = a;
-        if (b > largerSide) {
-            largerSide = b;
-            v0 = q.v0;
-            v1 = q.v1;
-            v2 = q.v2;
-            storeA = a;
-            storeC = c;
-        }
-        if (c > largerSide) {
-            v0 = q.v1;
-            v1 = q.v2;
-            v2 = q.v0;
-            storeA = b;
-            storeC = a;
-        }
+        output.set(
+                a,
+                b,
+                c,
+                (float) (0.25f * Math.sqrt(4f * aSquare * bSquare - abcSquare))
+        );
+    }
 
-        q.v0 = v0;
-        q.v1 = v1;
-        q.v2 = v2;
+    private void adjustQuad(Quad q, Vector4f area) {
+        float v0v1size = area.x();
+        float v2v0size = area.z();
+        if (v2v0size > v0v1size) {
+            int v1 = q.v1;
+            int v2 = q.v2;
+            int sv0 = q.sv0;
+            int sv2 = q.sv2;
 
-        q.width = storeA;
-        q.height = storeC;
-        if (q.height > q.width) {
-            int storeV1 = q.v1;
-            int storeV2 = q.v2;
-            q.v1 = storeV2;
-            q.v2 = storeV1;
-            float storeWidth = q.width;
-            float storeHeight = q.height;
-            q.width = storeHeight;
-            q.height = storeWidth;
+            q.v1 = v2;
+            q.v2 = v1;
+            q.sv0 = sv2;
+            q.sv2 = sv0;
+
+            float temp = v0v1size;
+            v0v1size = v2v0size;
+            v2v0size = temp;
         }
+        q.width = v0v1size;
+        q.height = v2v0size;
     }
 
     private void mapQuads() {
+        Vector4i current = new Vector4i();
+        Vector4i sideA = new Vector4i();
+        Vector4i sideB = new Vector4i();
+        Vector4i sideC = new Vector4i();
+
+        Vector4f currentArea = new Vector4f();
+        Vector4f sideAArea = new Vector4f();
+        Vector4f sideBArea = new Vector4f();
+        Vector4f sideCArea = new Vector4f();
+
+        Vector4i[] sideTriangles = new Vector4i[]{sideA, sideB, sideC};
+        Vector4f[] sideAreas = new Vector4f[]{sideAArea, sideBArea, sideCArea};
+
         for (int v = 0; v < this.vertices.length; v += (this.vertexSize * 3)) {
             int triangle = (v / this.vertexSize) / 3;
             if (this.processedTriangles.contains(triangle)) {
@@ -241,61 +298,90 @@ public class LightmapUVGenerator {
             int v0 = v;
             int v1 = v + this.vertexSize;
             int v2 = v + (this.vertexSize * 2);
+
+            current.set(v0, v1, v2, triangle);
+            findSideTriangle(v0, v1, sideA);
+            findSideTriangle(v1, v2, sideB);
+            findSideTriangle(v2, v0, sideC);
+
+            calculateArea(current, currentArea);
+
+            for (int i = 0; i < sideTriangles.length; i++) {
+                Vector4i sideTriangle = sideTriangles[i];
+                Vector4f sideTriangleArea = sideAreas[i];
+                if (sideTriangle.w() != -1) {
+                    calculateArea(sideTriangle, sideTriangleArea);
+                }
+            }
+
+            Vector4i best = null;
+            int bestSide = 0;
+            float bestSideSize = 0f;
+            
+            for (int i = 0; i < sideTriangles.length; i++) {
+                Vector4i sideTriangle = sideTriangles[i];
+                Vector4f sideTriangleArea = sideAreas[i];
+                if (sideTriangle.w() != -1) {
+                    if (sideTriangleArea.z() > bestSideSize) {
+                        best = sideTriangle;
+                        bestSideSize = sideTriangleArea.z();
+                        bestSide = i;
+                    }
+                }
+            }
+
             Quad q = new Quad();
-            q.v0 = v0;
-            q.v1 = v1;
-            q.v2 = v2;
-
-            setToLargerSideAndCalculateArea(q);
-
-            int striangle = -1;
-
-            Vertex e = new Vertex();
-            e.vertex = q.v1;
-            List<Vertex> v1Vertices = this.mappedVertices.get(e);
-            e.vertex = q.v2;
-            List<Vertex> v2Vertices = this.mappedVertices.get(e);
-
-            int sv0 = -1;
-            int sv1 = -1;
-            int sv2 = -1;
-
-            searchTriangle:
-            for (Vertex v1v : v1Vertices) {
-                striangle = (v1v.vertex / this.vertexSize) / 3;
-                if (this.processedTriangles.contains(striangle)) {
-                    striangle = -1;
-                    continue;
-                }
-                sv0 = v1v.vertex;
-                for (Vertex v2v : v2Vertices) {
-                    int otherTriangle = (v2v.vertex / this.vertexSize) / 3;
-                    if (otherTriangle == striangle) {
-                        sv2 = v2v.vertex;
-                        break searchTriangle;
-                    }
-                }
-                striangle = -1;
-            }
-
-            if (striangle != -1) {
-                for (int i = 0; i < 3; i++) {
-                    int r = (striangle * 3 * this.vertexSize) + (this.vertexSize * i);
-                    if (r != sv0 && r != sv2) {
-                        sv1 = r;
-                        break;
-                    }
-                }
-
-                q.secondTriangle = true;
-                q.sv0 = sv0;
-                q.sv1 = sv1;
-                q.sv2 = sv2;
-
-                this.processedTriangles.add(striangle);
-            }
-
             this.quads.add(q);
+
+            q.v0 = current.x();
+            q.v1 = current.y();
+            q.v2 = current.z();
+
+            float currentAreaX = currentArea.x();
+            float currentAreaY = currentArea.y();
+            float currentAreaZ = currentArea.z();
+
+            if (best != null) {
+                switch (bestSide) {
+                    case 0 -> {
+                        q.v0 = current.z();
+                        q.v1 = current.x();
+                        q.v2 = current.y();
+                        currentArea.set(
+                                currentAreaZ,
+                                currentAreaX,
+                                currentAreaY
+                        );
+                    }
+                    case 1 -> {
+                        q.v0 = current.x();
+                        q.v1 = current.y();
+                        q.v2 = current.z();
+                        currentArea.set(
+                                currentAreaX,
+                                currentAreaY,
+                                currentAreaZ
+                        );
+                    }
+                    case 2 -> {
+                        q.v0 = current.y();
+                        q.v1 = current.z();
+                        q.v2 = current.x();
+                        currentArea.set(
+                                currentAreaY,
+                                currentAreaZ,
+                                currentAreaX
+                        );
+                    }
+                }
+                this.processedTriangles.add(best.w());
+                q.secondTriangle = true;
+                q.sv0 = best.x();
+                q.sv1 = best.y();
+                q.sv2 = best.z();
+            }
+
+            adjustQuad(q, currentArea);
         }
     }
 
@@ -394,7 +480,7 @@ public class LightmapUVGenerator {
 
             group.width = width;
             group.height = height;
-            group.level = (int) (Math.floor(Math.log(Math.sqrt(group.width * group.height)) / Math.log(2.0)));
+            group.level = (int) (Math.round(Math.log(Math.sqrt(group.width * group.height)) / Math.log(2.0)));
             this.groupsList.add(group);
         }
 
@@ -664,9 +750,9 @@ public class LightmapUVGenerator {
         Vector2f vert0 = new Vector2f();
         Vector2f vert1 = new Vector2f();
         Vector2f vert2 = new Vector2f();
-        
+
         Vector2f direction = new Vector2f();
-        
+
         for (Quad q : this.quads) {
             float invLightmapSize = 1f / BASE_LIGHTMAP_SIZE;
 
@@ -683,11 +769,11 @@ public class LightmapUVGenerator {
 
             float v2u = minU;
             float v2v = maxV;
-            
+
             vert0.set(v0u, v0v).mul(invLightmapSize);
             vert1.set(v1u, v1v).mul(invLightmapSize);
             vert2.set(v2u, v2v).mul(invLightmapSize);
-            
+
             this.vertices[q.v0 + this.outUVOffset + 0] = vert0.x();
             this.vertices[q.v0 + this.outUVOffset + 1] = vert0.y();
 
@@ -724,18 +810,18 @@ public class LightmapUVGenerator {
                 this.vertices[q.sv1 + this.outUVAngleOffset + 0] = topRightAngle;
                 this.vertices[q.sv2 + this.outUVAngleOffset + 0] = topLeftAngle;
             } else {
-                float cX = (vert0.x()/3f) + (vert1.x()/3f) + (vert2.x()/3f);
-                float cY = (vert0.y()/3f) + (vert1.y()/3f) + (vert2.y()/3f);
-                
+                float cX = (vert0.x() / 3f) + (vert1.x() / 3f) + (vert2.x() / 3f);
+                float cY = (vert0.y() / 3f) + (vert1.y() / 3f) + (vert2.y() / 3f);
+
                 direction.set(cX, cY).sub(vert0).normalize();
                 float v0Angle = (float) Math.atan2(direction.y(), direction.x());
-                
+
                 direction.set(cX, cY).sub(vert1).normalize();
                 float v1Angle = (float) Math.atan2(direction.y(), direction.x());
-                
+
                 direction.set(cX, cY).sub(vert2).normalize();
                 float v2Angle = (float) Math.atan2(direction.y(), direction.x());
-                
+
                 this.vertices[q.v0 + this.outUVAngleOffset + 0] = v0Angle;
                 this.vertices[q.v1 + this.outUVAngleOffset + 0] = v1Angle;
                 this.vertices[q.v2 + this.outUVAngleOffset + 0] = v2Angle;
