@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-import org.joml.Vector2f;
 import org.joml.Vector4f;
 import org.joml.Vector4i;
 
@@ -45,8 +44,23 @@ import org.joml.Vector4i;
  * @author Cien
  */
 public class LightmapUVGenerator {
-
-    public static final int BASE_LIGHTMAP_SIZE = 64;
+    
+    public static Pair<float[], float[]> generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
+        if ((lightmapSize > 0) && ((lightmapSize & (lightmapSize - 1)) != 0)) {
+            throw new IllegalArgumentException("Lightmap size is not a power of two.");
+        }
+        if (vertices.length % vertexSize != 0) {
+            throw new IllegalArgumentException("Wrong size.");
+        }
+        if (vertices.length % (3 * vertexSize) != 0) {
+            throw new IllegalArgumentException("Not a triangulated mesh.");
+        }
+        if (vertices.length == 0) {
+            return new Pair<>(new float[0], new float[0]);
+        }
+        return new LightmapUVGenerator(vertices, vertexSize, xyzOffset, lightmapSize).process();
+    }
+    
     public static final float PRECISION_FIX = 0.001f;
     public static final int MINIMUM_TRIANGLE_SIZE = 4;
     public static final float SQUARE_TOLERANCE = 0.15f;
@@ -131,8 +145,7 @@ public class LightmapUVGenerator {
     private final float[] vertices;
     private final int vertexSize;
     private final int xyzOffset;
-    private final int outUVOffset;
-    private final int outUVAngleOffset;
+    private final int lightmapSize;
 
     private final Map<Vertex, List<Vertex>> mappedVertices = new HashMap<>();
 
@@ -150,13 +163,12 @@ public class LightmapUVGenerator {
 
     private float totalWidth = 0f;
     private float totalHeight = 0f;
-
-    public LightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, int outUVOffset, int outUVAngleOffset) {
+    
+    private LightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
         this.vertices = vertices;
         this.vertexSize = vertexSize;
         this.xyzOffset = xyzOffset;
-        this.outUVOffset = outUVOffset;
-        this.outUVAngleOffset = outUVAngleOffset;
+        this.lightmapSize = lightmapSize;
     }
 
     private void mapVertices() {
@@ -317,7 +329,7 @@ public class LightmapUVGenerator {
             Vector4i best = null;
             int bestSide = 0;
             float bestSideSize = 0f;
-            
+
             for (int i = 0; i < sideTriangles.length; i++) {
                 Vector4i sideTriangle = sideTriangles[i];
                 Vector4f sideTriangleArea = sideAreas[i];
@@ -395,7 +407,7 @@ public class LightmapUVGenerator {
             float size = (float) Math.sqrt(area);
             float aspectWidth = q.width / size;
             float aspectHeight = q.height / size;
-            area = (area / totalArea) * (BASE_LIGHTMAP_SIZE * BASE_LIGHTMAP_SIZE);
+            area = (area / totalArea) * (this.lightmapSize * this.lightmapSize);
             size = (float) Math.sqrt(area);
             q.width = size * aspectWidth;
             q.height = size * aspectHeight;
@@ -506,7 +518,7 @@ public class LightmapUVGenerator {
     }
 
     private void adjustGroupLevels() {
-        int maxLevel = (int) Math.round(Math.log(BASE_LIGHTMAP_SIZE) / Math.log(2.0));
+        int maxLevel = (int) Math.round(Math.log(this.lightmapSize) / Math.log(2.0));
         if (this.groups.length == 1) {
             this.groups[0].level = maxLevel;
             return;
@@ -717,7 +729,7 @@ public class LightmapUVGenerator {
     }
 
     private void fitQuads() {
-        float size = BASE_LIGHTMAP_SIZE;
+        float size = this.lightmapSize;
         float scaleX = size / this.totalWidth;
         float scaleY = size / this.totalHeight;
         for (Quad q : this.quads) {
@@ -736,100 +748,72 @@ public class LightmapUVGenerator {
         this.totalHeight = size;
     }
 
-    private void outputUVs() {
-        Vector2f bottomLeft = new Vector2f(1f, 1f).normalize();
-        Vector2f bottomRight = new Vector2f(-1f, 1f).normalize();
-        Vector2f topLeft = new Vector2f(1f, -1f).normalize();
-        Vector2f topRight = new Vector2f(-1f, -1f).normalize();
-
-        float bottomLeftAngle = (float) Math.atan2(bottomLeft.y(), bottomLeft.x());
-        float bottomRightAngle = (float) Math.atan2(bottomRight.y(), bottomRight.x());
-        float topLeftAngle = (float) Math.atan2(topLeft.y(), topLeft.x());
-        float topRightAngle = (float) Math.atan2(topRight.y(), topRight.x());
-
-        Vector2f vert0 = new Vector2f();
-        Vector2f vert1 = new Vector2f();
-        Vector2f vert2 = new Vector2f();
-
-        Vector2f direction = new Vector2f();
+    private Pair<float[], float[]> outputUVs() {
+        float[] forBake = new float[(this.vertices.length / this.vertexSize) * 2];
+        float[] forRender = new float[(this.vertices.length / this.vertexSize) * 2];
 
         for (Quad q : this.quads) {
-            float invLightmapSize = 1f / BASE_LIGHTMAP_SIZE;
+            int v0 = (q.v0 / this.vertexSize) * 2;
+            int v1 = (q.v1 / this.vertexSize) * 2;
+            int v2 = (q.v2 / this.vertexSize) * 2;
+            int sv0 = (q.sv0 / this.vertexSize) * 2;
+            int sv1 = (q.sv1 / this.vertexSize) * 2;
+            int sv2 = (q.sv2 / this.vertexSize) * 2;
 
-            float minU = q.x;
-            float minV = q.y;
-            float maxU = q.x + q.width;
-            float maxV = q.y + q.height;
+            final float offset = 0.5f;
 
-            float v0u = minU;
-            float v0v = minV;
+            float invLightmapSize = 1f / this.lightmapSize;
 
-            float v1u = maxU;
-            float v1v = minV;
+            float minX = q.x;
+            float minY = q.y;
+            
+            float maxX = q.x + q.width;
+            float maxY = q.y + q.height;
 
-            float v2u = minU;
-            float v2v = maxV;
+            forBake[v0 + 0] = minX * invLightmapSize;
+            forBake[v0 + 1] = minY * invLightmapSize;
 
-            vert0.set(v0u, v0v).mul(invLightmapSize);
-            vert1.set(v1u, v1v).mul(invLightmapSize);
-            vert2.set(v2u, v2v).mul(invLightmapSize);
+            forBake[v1 + 0] = maxX * invLightmapSize;
+            forBake[v1 + 1] = minY * invLightmapSize;
 
-            this.vertices[q.v0 + this.outUVOffset + 0] = vert0.x();
-            this.vertices[q.v0 + this.outUVOffset + 1] = vert0.y();
+            forBake[v2 + 0] = minX * invLightmapSize;
+            forBake[v2 + 1] = maxY * invLightmapSize;
 
-            this.vertices[q.v1 + this.outUVOffset + 0] = vert1.x();
-            this.vertices[q.v1 + this.outUVOffset + 1] = vert1.y();
+            forRender[v0 + 0] = (minX + offset) * invLightmapSize;
+            forRender[v0 + 1] = (minY + offset) * invLightmapSize;
 
-            this.vertices[q.v2 + this.outUVOffset + 0] = vert2.x();
-            this.vertices[q.v2 + this.outUVOffset + 1] = vert2.y();
+            forRender[v1 + 0] = (maxX - offset) * invLightmapSize;
+            forRender[v1 + 1] = (minY + offset) * invLightmapSize;
+
+            forRender[v2 + 0] = (minX + offset) * invLightmapSize;
+            forRender[v2 + 1] = (maxY - offset) * invLightmapSize;
 
             if (q.secondTriangle) {
-                this.vertices[q.v0 + this.outUVAngleOffset + 0] = bottomLeftAngle;
-                this.vertices[q.v1 + this.outUVAngleOffset + 0] = bottomRightAngle;
-                this.vertices[q.v2 + this.outUVAngleOffset + 0] = topLeftAngle;
+                forBake[sv0 + 0] = maxX * invLightmapSize;
+                forBake[sv0 + 1] = minY * invLightmapSize;
 
-                v0u = maxU;
-                v0v = minV;
+                forBake[sv1 + 0] = maxX * invLightmapSize;
+                forBake[sv1 + 1] = maxY * invLightmapSize;
 
-                v1u = maxU;
-                v1v = maxV;
+                forBake[sv2 + 0] = minX * invLightmapSize;
+                forBake[sv2 + 1] = maxY * invLightmapSize;
 
-                v2u = minU;
-                v2v = maxV;
+                forRender[sv0 + 0] = (maxX - offset) * invLightmapSize;
+                forRender[sv0 + 1] = (minY + offset) * invLightmapSize;
 
-                this.vertices[q.sv0 + this.outUVOffset + 0] = v0u * invLightmapSize;
-                this.vertices[q.sv0 + this.outUVOffset + 1] = v0v * invLightmapSize;
+                forRender[sv1 + 0] = (maxX - offset) * invLightmapSize;
+                forRender[sv1 + 1] = (maxY - offset) * invLightmapSize;
 
-                this.vertices[q.sv1 + this.outUVOffset + 0] = v1u * invLightmapSize;
-                this.vertices[q.sv1 + this.outUVOffset + 1] = v1v * invLightmapSize;
-
-                this.vertices[q.sv2 + this.outUVOffset + 0] = v2u * invLightmapSize;
-                this.vertices[q.sv2 + this.outUVOffset + 1] = v2v * invLightmapSize;
-
-                this.vertices[q.sv0 + this.outUVAngleOffset + 0] = bottomRightAngle;
-                this.vertices[q.sv1 + this.outUVAngleOffset + 0] = topRightAngle;
-                this.vertices[q.sv2 + this.outUVAngleOffset + 0] = topLeftAngle;
-            } else {
-                float cX = (vert0.x() / 3f) + (vert1.x() / 3f) + (vert2.x() / 3f);
-                float cY = (vert0.y() / 3f) + (vert1.y() / 3f) + (vert2.y() / 3f);
-
-                direction.set(cX, cY).sub(vert0).normalize();
-                float v0Angle = (float) Math.atan2(direction.y(), direction.x());
-
-                direction.set(cX, cY).sub(vert1).normalize();
-                float v1Angle = (float) Math.atan2(direction.y(), direction.x());
-
-                direction.set(cX, cY).sub(vert2).normalize();
-                float v2Angle = (float) Math.atan2(direction.y(), direction.x());
-
-                this.vertices[q.v0 + this.outUVAngleOffset + 0] = v0Angle;
-                this.vertices[q.v1 + this.outUVAngleOffset + 0] = v1Angle;
-                this.vertices[q.v2 + this.outUVAngleOffset + 0] = v2Angle;
+                forRender[sv2 + 0] = (minX + offset) * invLightmapSize;
+                forRender[sv2 + 1] = (maxY - offset) * invLightmapSize;
             }
+
         }
+
+        return new Pair<>(forBake, forRender);
     }
 
-    public void process() {
+    public Pair<float[], float[]> process() {
         mapVertices();
         mapQuads();
         calculateQuadAreas();
@@ -839,8 +823,8 @@ public class LightmapUVGenerator {
         connectQuadTrees();
         translateQuadTrees();
         ungroupQuadTrees();
-        fitQuads();
-        outputUVs();
+        //fitQuads();
+        return outputUVs();
     }
 
 }

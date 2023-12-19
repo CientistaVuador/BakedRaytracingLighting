@@ -29,7 +29,12 @@ package cientistavuador.bakedlighting.resources.mesh;
 import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.util.BVH;
+import cientistavuador.bakedlighting.util.MeshUtils;
+import cientistavuador.bakedlighting.util.ObjectCleaner;
+import cientistavuador.bakedlighting.util.Pair;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.lwjgl.opengl.GL;
@@ -43,34 +48,168 @@ import org.lwjgl.opengl.KHRDebug;
 public class MeshData {
 
     //position (vec3), texture uv (vec2), normal (vec3), tangent (vec3), lightmap uv (vec2), lightmap uv angle (float)
-    public static final int SIZE = 3 + 2 + 3 + 3 + 2 + 1;
-    
+    public static final int SIZE = 3 + 2 + 3 + 3 + 2;
+
     public static final int XYZ_OFFSET = 0;
     public static final int UV_OFFSET = 0 + 3;
     public static final int N_XYZ_OFFSET = 0 + 3 + 2;
     public static final int T_XYZ_OFFSET = 0 + 3 + 2 + 3;
     public static final int L_UV_OFFSET = 0 + 3 + 2 + 3 + 3;
-    public static final int L_UV_ANGLE_OFFSET = 0 + 3 + 2 + 3 + 3 + 2;
-    
+
+    private static void configureBoundVAO() {
+        //position
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (XYZ_OFFSET * Float.BYTES));
+
+        //texture
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (UV_OFFSET * Float.BYTES));
+
+        //normal
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (N_XYZ_OFFSET * Float.BYTES));
+
+        //tangent
+        glEnableVertexAttribArray(3);
+        glVertexAttribPointer(3, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (T_XYZ_OFFSET * Float.BYTES));
+    }
+
+    public static class LightmapMesh {
+
+        private final MeshData parent;
+        private final int lightmapSize;
+        private final CompletableFuture<Pair<float[], float[]>> futureLightmap;
+
+        private float[] lightmapUVsBake;
+        private float[] lightmapUVsRender;
+
+        private int vbo = 0;
+        private int vao = 0;
+
+        public LightmapMesh(MeshData parent, int lightmapSize) {
+            this.parent = parent;
+            this.lightmapSize = lightmapSize;
+            this.futureLightmap = CompletableFuture.supplyAsync(() -> {
+                return MeshUtils.generateLightmapUV(
+                        parent.getVertices(),
+                        MeshData.SIZE,
+                        MeshData.XYZ_OFFSET,
+                        lightmapSize
+                );
+            });
+        }
+
+        public MeshData getParent() {
+            return parent;
+        }
+
+        public int getLightmapSize() {
+            return lightmapSize;
+        }
+
+        private void ensureProcessingIsDone() {
+            if (this.lightmapUVsBake != null && this.lightmapUVsRender != null) {
+                return;
+            }
+            try {
+                Pair<float[], float[]> pair = futureLightmap.get();
+                float[] forBake = pair.getA();
+                float[] forRender = pair.getB();
+                this.lightmapUVsBake = forBake;
+                this.lightmapUVsRender = forRender;
+            } catch (InterruptedException | ExecutionException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+
+        public float[] getLightmapUVsBake() {
+            ensureProcessingIsDone();
+            return lightmapUVsBake;
+        }
+
+        public float[] getLightmapUVsRender() {
+            ensureProcessingIsDone();
+            return lightmapUVsRender;
+        }
+
+        public int getVAO() {
+            if (this.vao == 0) {
+                ensureProcessingIsDone();
+                this.parent.getVAO();
+                
+                this.vao = glGenVertexArrays();
+                glBindVertexArray(this.vao);
+                
+                //mesh
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this.parent.ebo);
+                
+                glBindBuffer(GL_ARRAY_BUFFER, this.parent.vbo);
+                configureBoundVAO();
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                
+                //lightmap uv
+                this.vbo = glGenBuffers();
+                glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
+                glBufferData(GL_ARRAY_BUFFER, getLightmapUVsRender(), GL_STATIC_DRAW);
+                glEnableVertexAttribArray(4);
+                glVertexAttribPointer(4, 2, GL_FLOAT, false, 2 * Float.BYTES, 0);
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                
+                glBindVertexArray(0);
+                
+                if (Main.DEBUG_ENABLED && GL.getCapabilities().GL_KHR_debug) {
+                    KHRDebug.glObjectLabel(GL_VERTEX_ARRAY, this.vao, "Lightmap_" + this.lightmapSize + "_Mesh_" + parent.getName());
+                }
+
+                final int vaoFinal = this.vao;
+                final int vboFinal = this.vbo;
+
+                ObjectCleaner.get().register(this, () -> {
+                    Main.MAIN_TASKS.add(() -> {
+                        glDeleteVertexArrays(vaoFinal);
+                        glDeleteBuffers(vboFinal);
+                    });
+                });
+            }
+            return vao;
+        }
+
+        public boolean isDone() {
+            return this.futureLightmap.isDone();
+        }
+
+    }
+
     private final String name;
+
     private final float[] vertices;
     private final int[] indices;
     private final CompletableFuture<BVH> futureBvh;
+
+    private final boolean lightmapSupport;
+    private final List<LightmapMesh> lightmapMeshes = new ArrayList<>();
+
     private BVH bvh = null;
     private int vao = 0;
     private int ebo = 0;
     private int vbo = 0;
     private int textureHint = Textures.EMPTY_TEXTURE;
 
-    public MeshData(String name, float[] vertices, int[] indices) {
+    public MeshData(String name, float[] vertices, int[] indices, boolean addLightmapSupport) {
         this.name = name;
+        if (addLightmapSupport) {
+            Pair<float[], int[]> unindexed = MeshUtils.unindex(vertices, indices, MeshData.SIZE);
+            vertices = unindexed.getA();
+            indices = unindexed.getB();
+        }
+        this.lightmapSupport = addLightmapSupport;
         this.vertices = vertices;
         this.indices = indices;
         this.futureBvh = CompletableFuture.supplyAsync(() -> {
-            return BVH.createAlternative(vertices, MeshData.SIZE, MeshData.XYZ_OFFSET, indices);
+            return BVH.create(this.vertices, MeshData.SIZE, MeshData.XYZ_OFFSET, this.indices);
         });
     }
-    
+
     public String getName() {
         return name;
     }
@@ -112,50 +251,33 @@ public class MeshData {
             glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
             glBufferData(GL_ARRAY_BUFFER, getVertices(), GL_STATIC_DRAW);
 
-            //position
-            glEnableVertexAttribArray(0);
-            glVertexAttribPointer(0, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (XYZ_OFFSET * Float.BYTES));
+            configureBoundVAO();
 
-            //texture
-            glEnableVertexAttribArray(1);
-            glVertexAttribPointer(1, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (UV_OFFSET * Float.BYTES));
-
-            //normal
-            glEnableVertexAttribArray(2);
-            glVertexAttribPointer(2, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (N_XYZ_OFFSET * Float.BYTES));
-            
-            //tangent
-            glEnableVertexAttribArray(3);
-            glVertexAttribPointer(3, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (T_XYZ_OFFSET * Float.BYTES));
-            
             //lightmap uv
             glEnableVertexAttribArray(4);
             glVertexAttribPointer(4, 2, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (L_UV_OFFSET * Float.BYTES));
-            
-            //lightmap uv angle
-            glEnableVertexAttribArray(5);
-            glVertexAttribPointer(5, 1, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (L_UV_ANGLE_OFFSET * Float.BYTES));
-            
+
             glBindBuffer(GL_ARRAY_BUFFER, 0);
-            
+
+            glBindVertexArray(0);
+
             if (Main.DEBUG_ENABLED && GL.getCapabilities().GL_KHR_debug) {
                 KHRDebug.glObjectLabel(GL_VERTEX_ARRAY, this.vao, "Mesh_" + getName());
             }
-            
-            glBindVertexArray(0);
+
+            final int vaoFinal = this.vao;
+            final int eboFinal = this.ebo;
+            final int vboFinal = this.vbo;
+
+            ObjectCleaner.get().register(this, () -> {
+                Main.MAIN_TASKS.add(() -> {
+                    glDeleteVertexArrays(vaoFinal);
+                    glDeleteBuffers(eboFinal);
+                    glDeleteBuffers(vboFinal);
+                });
+            });
         }
         return this.vao;
-    }
-
-    public void deleteVAO() {
-        if (this.vao != 0) {
-            glDeleteVertexArrays(this.vao);
-            glDeleteBuffers(this.ebo);
-            glDeleteBuffers(this.vbo);
-            this.vao = 0;
-            this.ebo = 0;
-            this.vbo = 0;
-        }
     }
 
     public int getTextureHint() {
@@ -200,7 +322,57 @@ public class MeshData {
         }
         return this.bvh;
     }
-    
+
+    public boolean hasLightmapSupport() {
+        return this.lightmapSupport;
+    }
+
+    public LightmapMesh getLightmapMesh(int lightmapSize) {
+        if (!hasLightmapSupport()) {
+            return null;
+        }
+        LightmapMesh result = null;
+        synchronized (this.lightmapMeshes) {
+            for (LightmapMesh m : this.lightmapMeshes) {
+                if (m.getLightmapSize() == lightmapSize) {
+                    result = m;
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    public int[] getSupportedLightmapSizes() {
+        if (!hasLightmapSupport()) {
+            return new int[0];
+        }
+        int[] output;
+        synchronized (this.lightmapMeshes) {
+            output = new int[this.lightmapMeshes.size()];
+            for (int i = 0; i < this.lightmapMeshes.size(); i++) {
+                output[i] = this.lightmapMeshes.get(i).getLightmapSize();
+            }
+        }
+        return output;
+    }
+
+    public LightmapMesh scheduleLightmapMesh(int lightmapSize) {
+        if (!hasLightmapSupport()) {
+            return null;
+        }
+        LightmapMesh mesh;
+        synchronized (this.lightmapMeshes) {
+            mesh = getLightmapMesh(lightmapSize);
+            if (mesh != null) {
+                return mesh;
+            }
+            mesh = new LightmapMesh(this, lightmapSize);
+            this.lightmapMeshes.add(mesh);
+        }
+        return mesh;
+    }
+
     @Override
     public int hashCode() {
         int hash = 7;

@@ -26,7 +26,7 @@
  */
 package cientistavuador.bakedlighting.shader;
 
-import cientistavuador.bakedlighting.util.BakedRaytracing;
+import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.BetterUniformSetter;
 import cientistavuador.bakedlighting.util.ProgramCompiler;
 import java.util.ArrayList;
@@ -204,7 +204,6 @@ public class GeometryProgram {
             layout (location = 2) in vec3 vertexNormal;
             layout (location = 3) in vec3 vertexTangent;
             layout (location = 4) in vec2 vertexLightmapUv;
-            layout (location = 5) in float vertexLightmapUvAngle;
             
             out vec3 position;
             out vec2 uv;
@@ -219,12 +218,7 @@ public class GeometryProgram {
                 uv = vertexUv;
                 linearNormal = normalize(normalModel * vertexNormal);
                 linearTangent = normalize(normalModel * vertexTangent);
-                
-                float pixelOffset = PIXEL_OFFSET;
-                vec2 lightmapSize = vec2(textureSize(lightmap, 0));
-                vec2 lightmapUvOffset = vec2(cos(vertexLightmapUvAngle), sin(vertexLightmapUvAngle));
-                lightmapUvOffset = clamp(lightmapUvOffset * 2.0, -1.0, 1.0) * (pixelOffset / lightmapSize);
-                lightmapUv = vertexLightmapUv + lightmapUvOffset;
+                lightmapUv = vertexLightmapUv;
                 
                 gl_Position = projectionView * pos;
             }
@@ -296,7 +290,6 @@ public class GeometryProgram {
             """,
             new HashMap<>() {{
                 put("MAX_AMOUNT_OF_LIGHTS", Integer.toString(MAX_AMOUNT_OF_LIGHTS));
-                put("PIXEL_OFFSET", Float.toString(BakedRaytracing.PIXEL_OFFSET));
             }}
     );
     

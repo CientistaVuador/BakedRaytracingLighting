@@ -326,13 +326,11 @@ public class MeshResources {
                 MeshData.UV_OFFSET,
                 MeshData.T_XYZ_OFFSET
         );
-        MeshUtils.generateLightmapUV(
-                newVertices,
-                MeshData.SIZE,
-                MeshData.XYZ_OFFSET,
-                MeshData.L_UV_OFFSET,
-                MeshData.L_UV_ANGLE_OFFSET
-        );
+        
+        for (int v = 0; v < newVertices.length; v += MeshData.SIZE) {
+            newVertices[v + MeshData.L_UV_OFFSET + 0] = 0.5f;
+            newVertices[v + MeshData.L_UV_OFFSET + 1] = 0.5f;
+        }
         
         Pair<float[], int[]> verticesIndices = MeshUtils.generateIndices(
                 newVertices,
@@ -342,7 +340,8 @@ public class MeshResources {
         return new MeshData(
                 this.name+this.objectName,
                 verticesIndices.getA(),
-                verticesIndices.getB()
+                verticesIndices.getB(),
+                true
         );
     }
 

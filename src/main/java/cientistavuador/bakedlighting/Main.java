@@ -47,6 +47,7 @@ import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
 import org.lwjgl.glfw.GLFWFramebufferSizeCallbackI;
 import org.lwjgl.glfw.GLFWImage;
+import org.lwjgl.glfw.GLFWVidMode;
 import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL33C.*;
 import org.lwjgl.opengl.GLDebugMessageCallback;
@@ -117,6 +118,7 @@ public class Main {
     public static int FPS = 60;
     public static long WINDOW_POINTER = NULL;
     public static long FRAME = 0;
+    public static boolean FULLSCREEN = false;
     public static double ONE_SECOND_COUNTER = 0.0;
     public static double ONE_MINUTE_COUNTER = 0.0;
     public static int NUMBER_OF_DRAWCALLS = 0;
@@ -138,8 +140,10 @@ public class Main {
     public static final ConcurrentLinkedQueue<Runnable> MAIN_TASKS = new ConcurrentLinkedQueue<>();
     public static final Vector3f DEFAULT_CLEAR_COLOR = new Vector3f(0.2f, 0.4f, 0.6f);
     public static final String WINDOW_ICON = "cientistavuador/bakedlighting/resources/image/window_icon.png";
+    private static final int[] savedWindowStatus = new int[4];
     private static GLDebugMessageCallback DEBUG_CALLBACK = null;
-
+    
+    
     private static String debugSource(int source) {
         return switch (source) {
             case GL_DEBUG_SOURCE_API ->
@@ -246,7 +250,7 @@ public class Main {
             try {
                 URLConnection connection = iconUrl.openConnection();
                 connection.connect();
-                
+
                 iconData = MemoryUtil.memAlloc(connection.getContentLength());
 
                 try (InputStream iconStream = connection.getInputStream()) {
@@ -256,17 +260,17 @@ public class Main {
                         iconData.put(buffer, 0, read);
                     }
                 }
-                
+
                 iconData.rewind();
             } catch (IOException ex) {
-                System.out.println("Warning: Failed to read window icon '"+WINDOW_ICON+"'");
+                System.out.println("Warning: Failed to read window icon '" + WINDOW_ICON + "'");
                 ex.printStackTrace(System.out);
                 if (iconData != null) {
                     MemoryUtil.memFree(iconData);
                 }
                 break loadWindowIcon;
             }
-            
+
             ByteBuffer iconRawData;
             int[] width = {0};
             int[] height = {0};
@@ -275,12 +279,12 @@ public class Main {
             } finally {
                 MemoryUtil.memFree(iconData);
             }
-            
+
             if (iconRawData == null) {
-                System.out.println("Warning: Window icon '"+WINDOW_ICON+"' not supported; "+stbi_failure_reason());
+                System.out.println("Warning: Window icon '" + WINDOW_ICON + "' not supported; " + stbi_failure_reason());
                 break loadWindowIcon;
             }
-            
+
             try {
                 GLFWImage.Buffer iconImage = GLFWImage.calloc(1);
                 try {
@@ -288,9 +292,9 @@ public class Main {
                             .width(width[0])
                             .height(height[0])
                             .pixels(iconRawData);
-                    
+
                     glfwSetWindowIcon(WINDOW_POINTER, iconImage);
-                    System.out.println("Finished loading window icon; width="+width[0]+", height="+height[0]+", path='"+WINDOW_ICON+"'");
+                    System.out.println("Finished loading window icon; width=" + width[0] + ", height=" + height[0] + ", path='" + WINDOW_ICON + "'");
                 } finally {
                     MemoryUtil.memFree(iconImage);
                 }
@@ -391,6 +395,42 @@ public class Main {
         });
 
         glfwSetKeyCallback(WINDOW_POINTER, (window, key, scancode, action, mods) -> {
+            if (key == GLFW_KEY_F11 && action == GLFW_PRESS) {
+                Main.FULLSCREEN = glfwGetWindowMonitor(window) != NULL;
+                if (!Main.FULLSCREEN) {
+                    goFullscreen:
+                    {
+                        long primary = glfwGetPrimaryMonitor();
+                        if (primary == NULL) {
+                            System.out.println("Warning: No Monitors Found.");
+                            break goFullscreen;
+                        }
+                        GLFWVidMode mode = glfwGetVideoMode(primary);
+                        if (mode == null) {
+                            System.out.println("Warning: Video Mode Query Failed for " + glfwGetMonitorName(primary));
+                            break goFullscreen;
+                        }
+                        int[] windowX = {0};
+                        int[] windowY = {0};
+                        int[] windowWidth = {0};
+                        int[] windowHeight = {0};
+                        
+                        glfwGetWindowPos(window, windowX, windowY);
+                        glfwGetWindowSize(window, windowWidth, windowHeight);
+                        
+                        Main.savedWindowStatus[0] = windowX[0];
+                        Main.savedWindowStatus[1] = windowY[0];
+                        Main.savedWindowStatus[2] = windowWidth[0];
+                        Main.savedWindowStatus[3] = windowHeight[0];
+                        
+                        glfwSetWindowMonitor(window, primary, 0, 0, mode.width(), mode.height(), mode.refreshRate());
+                        Main.FULLSCREEN = true;
+                    }
+                } else {
+                    glfwSetWindowMonitor(window, NULL, Main.savedWindowStatus[0], Main.savedWindowStatus[1], Main.savedWindowStatus[2], Main.savedWindowStatus[3], GLFW_DONT_CARE);
+                    Main.FULLSCREEN = false;
+                }
+            }
             Game.get().keyCallback(window, key, scancode, action, mods);
         });
 

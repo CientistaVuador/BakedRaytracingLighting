@@ -29,7 +29,6 @@ package cientistavuador.bakedlighting.util;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import org.joml.Vector2f;
 
 /**
  *
@@ -201,17 +200,18 @@ public class MeshUtils {
         );
     }
     
-    public static void generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int outLightmapUV, int outLightmapUVAngle) {
-        if (vertices.length % vertexSize != 0) {
-            throw new IllegalArgumentException("Wrong size.");
+    public static Pair<float[], int[]> unindex(float[] vertices, int[] indices, int vertexSize) {
+        float[] unindexedVertices = new float[indices.length * vertexSize];
+        int[] unindexedIndices = new int[indices.length];
+        for (int i = 0; i < indices.length; i++) {
+            System.arraycopy(vertices, indices[i] * vertexSize, unindexedVertices, i * vertexSize, vertexSize);
+            unindexedIndices[i] = i;
         }
-        if (vertices.length % (3 * vertexSize) != 0) {
-            throw new IllegalArgumentException("Not a triangulated mesh.");
-        }
-        if (vertices.length == 0) {
-            return;
-        }
-        new LightmapUVGenerator(vertices, vertexSize, xyzOffset, outLightmapUV, outLightmapUVAngle).process();
+        return new Pair<>(unindexedVertices, unindexedIndices);
+    }
+    
+    public static Pair<float[], float[]> generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
+        return LightmapUVGenerator.generateLightmapUV(vertices, vertexSize, xyzOffset, lightmapSize);
     }
     
     private MeshUtils() {

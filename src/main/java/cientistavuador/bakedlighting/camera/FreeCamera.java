@@ -146,14 +146,14 @@ public class FreeCamera extends PerspectiveCamera {
      * true again until that key is released; and pressed again,
      */
     private boolean isControlPressedOnce() {
-        if (isKeyDown(GLFW_KEY_LEFT_CONTROL)) {
+        if (isKeyDown(GLFW_KEY_ESCAPE)) {
             if (!controlAlreadyPressed) {
                 controlAlreadyPressed = true;
                 return true;
             }
             return false;
         }
-        if (isKeyUp(GLFW_KEY_LEFT_CONTROL)) {
+        if (isKeyUp(GLFW_KEY_ESCAPE)) {
             controlAlreadyPressed = false;
         }
         return false;

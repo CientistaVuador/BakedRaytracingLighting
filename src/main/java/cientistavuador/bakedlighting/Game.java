@@ -32,6 +32,7 @@ import cientistavuador.bakedlighting.debug.DebugCounter;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
 import cientistavuador.bakedlighting.geometry.Geometry;
+import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.text.GLFontRenderer;
 import cientistavuador.bakedlighting.text.GLFontSpecification;
@@ -39,7 +40,7 @@ import cientistavuador.bakedlighting.text.GLFontSpecifications;
 import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
-import cientistavuador.bakedlighting.util.BakedRaytracing;
+import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.RayResult;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -60,8 +61,9 @@ public class Game {
 
     private final FreeCamera camera = new FreeCamera();
     private RayResult ray = null;
-    private final BakedRaytracing.Scene scene = new BakedRaytracing.Scene();
-    private final BakedRaytracing baked = new BakedRaytracing();
+    private final BakedLighting.Scene scene = new BakedLighting.Scene();
+    
+    private BakedLighting.Status status = BakedLighting.dummyStatus();
 
     private Game() {
 
@@ -129,7 +131,18 @@ public class Game {
             glActiveTexture(GL_TEXTURE1);
             glBindTexture(GL_TEXTURE_2D, geo.getLightmapTextureHint());
             program.setModel(geo.getModel());
-            geo.getMesh().bindRenderUnbind();
+
+            MeshData mesh = geo.getMesh();
+            int lightmapSize = geo.getLightmapTextureSizeHint();
+
+            MeshData.LightmapMesh lightmapMesh = mesh.getLightmapMesh(lightmapSize);
+            if (lightmapMesh == null) {
+                glBindVertexArray(mesh.getVAO());
+            } else {
+                glBindVertexArray(lightmapMesh.getVAO());
+            }
+            mesh.render();
+            glBindVertexArray(0);
         }
         glUseProgram(0);
 
@@ -139,12 +152,14 @@ public class Game {
         String[] text = new String[]{
             new StringBuilder()
             .append("R - Bake Lightmap\n")
-            .append(this.baked.getCurrentProgressBar()).append('\n')
-            .append("Status: ").append(this.baked.getCurrentStatus()).append('\n')
+            .append(this.status.getASCIIProgressBar()).append('\n')
+            .append("Status: ").append(this.status.getCurrentStatus()).append('\n')
+            .append(this.status.getRaysPerSecondFormatted()).append('\n')
+            .append("FPS: ").append(Main.FPS).append('\n')
             .toString()
         };
-        GLFontRenderer.render(-0.795f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
-        GLFontRenderer.render(-0.80f, -0.60f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_WHITE}, text);
+        GLFontRenderer.render(-0.895f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
+        GLFontRenderer.render(-0.90f, -0.60f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_WHITE}, text);
 
         Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";
         Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
@@ -173,17 +188,14 @@ public class Game {
             c.print();
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-            if (this.baked.isDone()) {
-                this.baked.finish();
-            }
-            if (!this.baked.isRunning()) {
+            if (this.status.isDone()) {
                 for (Geometry geo : this.scene.getGeometries()) {
                     if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP_TEXTURE) {
                         glDeleteTextures(geo.getLightmapTextureHint());
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.baked.bake(this.scene, 512);
+                this.status = BakedLighting.bake(this.scene, 2048);
             }
         }
     }
