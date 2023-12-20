@@ -42,6 +42,9 @@ import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.RayResult;
+import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -113,7 +116,15 @@ public class Game {
         if (ray != null) {
             LineRender.queueRender(ray.getOrigin(), ray.getHitpoint());
         }
-
+        
+        if (this.status.hasError()) {
+            try {
+                this.status.throwException();
+            } catch (ExecutionException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        
         camera.updateMovement();
         camera.updateUBO();
 
@@ -195,7 +206,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 2048);
+                this.status = BakedLighting.bake(this.scene, 1024);
             }
         }
     }

@@ -83,6 +83,20 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
         return distance;
     }
     
+    public float lerp(Vector3fc weights, int componentOffset) {
+        int v0 = i0() * MeshData.SIZE;
+        int v1 = i1() * MeshData.SIZE;
+        int v2 = i2() * MeshData.SIZE;
+        
+        float[] vertices = this.geometry.getMesh().getVertices();
+        
+        float a = vertices[v0 + componentOffset];
+        float b = vertices[v1 + componentOffset];
+        float c = vertices[v2 + componentOffset];
+        
+        return (a * weights.x()) + (b * weights.y()) + (c * weights.z());
+    }
+    
     public void weights(Vector3f weights) {
         float[] vertices = this.geometry.getMesh().getVertices();
         
