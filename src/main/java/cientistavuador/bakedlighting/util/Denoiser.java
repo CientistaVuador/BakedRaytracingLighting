@@ -55,8 +55,8 @@ public class Denoiser {
         public void read(int x, int y, DenoiserColor color);
     }
 
-    public static void denoise(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance) {
-        new Denoiser(io, kernelSize, averageSimilar, similarSearchKernelSize, similarTolerance).process();
+    public static void denoise(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance, boolean useGaussianWeights) {
+        new Denoiser(io, kernelSize, averageSimilar, similarSearchKernelSize, similarTolerance, useGaussianWeights).process();
     }
 
     private final DenoiserIO io;
@@ -64,24 +64,34 @@ public class Denoiser {
     private final boolean averageSimilar;
     private final int similarSearchKernelSize;
     private final float similarTolerance;
+    private final boolean useGaussianWeights;
 
-    private Denoiser(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance) {
+    private final float[] similarSearchGaussian;
+    
+    private Denoiser(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance, boolean useGaussianWeights) {
         this.io = io;
         this.kernelSize = kernelSize;
         this.averageSimilar = averageSimilar;
         this.similarSearchKernelSize = similarSearchKernelSize;
         this.similarTolerance = similarTolerance;
-    }
-
-    public float luminance(DenoiserColor color) {
-        if (color.outOfBounds) {
-            return -1f;
+        this.useGaussianWeights = useGaussianWeights;
+        this.similarSearchGaussian = new float[similarSearchKernelSize * similarSearchKernelSize];
+        float sum = 0f;
+        for (int y = 0; y < this.similarSearchKernelSize; y++) {
+            for (int x = 0; x < this.similarSearchKernelSize; x++) {
+                float xValue = (x - (this.similarSearchKernelSize / 2));
+                float yValue = (y - (this.similarSearchKernelSize / 2));
+                float weight = (float) Math.exp(-((xValue * xValue) + (yValue * yValue)));
+                this.similarSearchGaussian[x + (y * this.similarSearchKernelSize)] = weight;
+                sum += weight;
+            }
         }
-        return (0.299f * color.r) + (0.587f * color.g) + (0.114f * color.b);
+        for (int i = 0; i < this.similarSearchGaussian.length; i++) {
+            this.similarSearchGaussian[i] /= sum;
+        }
     }
-
-    public int fillKernel(DenoiserColor[] pixels, int xCenter, int yCenter) {
-        int filled = 0;
+    
+    public void fillKernel(DenoiserColor[] pixels, int xCenter, int yCenter) {
         for (int y = 0; y < this.kernelSize; y++) {
             for (int x = 0; x < this.kernelSize; x++) {
                 int pX = (x + xCenter) - (this.kernelSize / 2);
@@ -99,41 +109,68 @@ public class Denoiser {
 
                 this.io.read(pX, pY, kernelColor);
                 kernelColor.outOfBounds = false;
+            }
+        }
+    }
 
+    public DenoiserColor findMedian(DenoiserColor[] pixels) {
+        int filled = 0;
+        for (int i = 0; i < pixels.length; i++) {
+            DenoiserColor color = pixels[i];
+            if (!color.outOfBounds) {
                 filled++;
             }
         }
-        return filled;
+        
+        if (filled == 0) {
+            return null;
+        }
+        
+        float[] redChannel = new float[filled];
+        float[] greenChannel = new float[filled];
+        float[] blueChannel = new float[filled];
+        
+        int filledIndex = 0;
+        for (int i = 0; i < pixels.length; i++) {
+            DenoiserColor color = pixels[i];
+            if (!color.outOfBounds) {
+                redChannel[filledIndex] = color.r;
+                greenChannel[filledIndex] = color.g;
+                blueChannel[filledIndex] = color.b;
+                filledIndex++;
+            }
+        }
+        
+        Arrays.sort(redChannel);
+        Arrays.sort(greenChannel);
+        Arrays.sort(blueChannel);
+        
+        float medianR = redChannel[redChannel.length / 2];
+        float medianG = greenChannel[greenChannel.length / 2];
+        float medianB = blueChannel[blueChannel.length / 2];
+        
+        DenoiserColor median = pixels[pixels.length / 2];
+        
+        median.r = medianR;
+        median.g = medianG;
+        median.b = medianB;
+        
+        return median;
     }
-
-    public void sortKernelByLuminance(DenoiserColor[] pixels) {
-        Arrays.sort(pixels, (o1, o2) -> {
-            float o1Luminance = luminance(o1);
-            float o2Luminance = luminance(o2);
-            return Float.compare(o1Luminance, o2Luminance);
-        });
-    }
-
+    
     public boolean compare(DenoiserColor a, DenoiserColor b) {
-        float dR = Math.abs(a.r - b.r);
-        float dG = Math.abs(a.g - b.g);
-        float dB = Math.abs(a.b - b.b);
-        return (dR < this.similarTolerance) && (dG < this.similarTolerance) && (dB < this.similarTolerance);
+        return Math.sqrt(Math.pow(a.r - b.r, 2.0) + Math.pow(a.g - b.g, 2.0) + Math.pow(a.b - b.b, 2.0)) < this.similarTolerance;
     }
 
     public void averageSimilar(DenoiserColor toFindSimilar, int xCenter, int yCenter, DenoiserColor outAverage) {
-        float r = toFindSimilar.r;
-        float g = toFindSimilar.g;
-        float b = toFindSimilar.b;
-        int count = 1;
+        float r = 0f;
+        float g = 0f;
+        float b = 0f;
+        float weightSum = 0f;
         for (int y = 0; y < this.similarSearchKernelSize; y++) {
             for (int x = 0; x < this.similarSearchKernelSize; x++) {
                 int pX = (x + xCenter) - (this.similarSearchKernelSize / 2);
                 int pY = (y + yCenter) - (this.similarSearchKernelSize / 2);
-
-                if (pX == xCenter && pY == yCenter) {
-                    continue;
-                }
 
                 if (this.io.outOfBounds(pX, pY)) {
                     continue;
@@ -142,20 +179,31 @@ public class Denoiser {
                 this.io.read(pX, pY, outAverage);
 
                 if (compare(toFindSimilar, outAverage)) {
-                    r += outAverage.r;
-                    g += outAverage.g;
-                    b += outAverage.b;
-                    count++;
+                    float weight;
+                    if (this.useGaussianWeights) {
+                        weight = this.similarSearchGaussian[x + (y * this.similarSearchKernelSize)];
+                    } else {
+                        weight = 1f;
+                    }
+                    
+                    r += (outAverage.r * weight);
+                    g += (outAverage.g * weight);
+                    b += (outAverage.b * weight);
+                    
+                    weightSum += weight;
                 }
             }
         }
-        float invcount = 1f / count;
-        r *= invcount;
-        g *= invcount;
-        b *= invcount;
-        outAverage.r = r;
-        outAverage.g = g;
-        outAverage.b = b;
+        if (weightSum == 0f) {
+            outAverage.r = toFindSimilar.r;
+            outAverage.g = toFindSimilar.g;
+            outAverage.b = toFindSimilar.b;
+        } else {
+            float inverseWeight = 1f / weightSum;
+            outAverage.r = r * inverseWeight;
+            outAverage.g = g * inverseWeight;
+            outAverage.b = b * inverseWeight;
+        }
     }
 
     public void process() {
@@ -173,26 +221,13 @@ public class Denoiser {
                     continue;
                 }
 
-                int filled = fillKernel(kernel, x, y);
-                sortKernelByLuminance(kernel);
-
-                int filledIndex = 0;
-                DenoiserColor median = null;
-                for (int i = 0; i < kernel.length; i++) {
-                    DenoiserColor color = kernel[i];
-                    if (!color.outOfBounds) {
-                        if (filledIndex == (filled / 2)) {
-                            median = color;
-                            break;
-                        }
-                        filledIndex++;
-                    }
-                }
-
+                fillKernel(kernel, x, y);
+                DenoiserColor median = findMedian(kernel);
+                
                 if (median == null) {
                     continue;
                 }
-
+                
                 if (this.averageSimilar) {
                     averageSimilar(median, x, y, outAverage);
                 } else {

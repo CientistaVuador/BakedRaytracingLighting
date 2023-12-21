@@ -63,10 +63,10 @@ public class BakedLighting {
 
         private final List<Geometry> geometries = new ArrayList<>();
 
-        private final Vector3f sunDirection = new Vector3f(-1f, -0.75f, 0.5f).normalize();
+        private final Vector3f sunDirection = new Vector3f(-0.5f, -0.75f, -0.5f).normalize();
         private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
         private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
-        private final Vector3f sunAmbientColor = new Vector3f(0.2f, 0.2f, 0.35f);
+        private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.6f);
 
         public Scene() {
 
@@ -1119,7 +1119,7 @@ public class BakedLighting {
                 }
             };
             
-            Denoiser.denoise(denoiserIO, 11, true, 21, 0.25f);
+            Denoiser.denoise(denoiserIO, 11, true, 21, 0.25f, false);
         }
 
         this.indirectColorBuffer = output;
