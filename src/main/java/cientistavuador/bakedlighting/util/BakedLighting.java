@@ -63,7 +63,7 @@ public class BakedLighting {
 
         private final List<Geometry> geometries = new ArrayList<>();
 
-        private final Vector3f sunDirection = new Vector3f(-0.5f, -0.75f, -0.5f).normalize();
+        private final Vector3f sunDirection = new Vector3f(0f, -1f, -1f).normalize();
         private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
         private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
         private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.6f);
@@ -959,7 +959,7 @@ public class BakedLighting {
                 float u = hitPos.lerp(hitWeights, MeshData.UV_OFFSET + 0);
                 float v = hitPos.lerp(hitWeights, MeshData.UV_OFFSET + 1);
 
-                this.sceneTextures.get(hitPos.getGeometry().getMesh()).sampleBilinear(u, v, colorOutput, 0);
+                this.sceneTextures.get(hitPos.getGeometry().getMesh()).sampleNearest(u, v, colorOutput, 0);
 
                 bounceColor.add(new Vector3f(colorOutput));
 
@@ -998,8 +998,11 @@ public class BakedLighting {
 
         Vector3f weights = new Vector3f();
         Vector3f color = new Vector3f();
-
+        
+        this.status.setProgressBarStep(this.indices.length);
         for (int i = 0; i < this.indices.length; i += 3) {
+            setStatusText("Denoising ("+i+"/"+this.indices.length+")");
+            
             int i0 = this.indices[i + 0];
             int i1 = this.indices[i + 1];
             int i2 = this.indices[i + 2];
@@ -1119,7 +1122,11 @@ public class BakedLighting {
                 }
             };
             
-            Denoiser.denoise(denoiserIO, 11, true, 21, 0.25f, false);
+            Denoiser.denoise(denoiserIO, 9, true, 9, 0.25f, false);
+            
+            for (int j = 0; j < 3; j++) {
+                this.status.stepProgressBar();
+            }
         }
 
         this.indirectColorBuffer = output;

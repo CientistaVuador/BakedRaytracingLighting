@@ -92,7 +92,7 @@ public class Game {
         }
 
         Geometry ciencola = new Geometry(Geometries.CIENCOLA);
-        //this.scene.getGeometries().add(ciencola);
+        this.scene.getGeometries().add(ciencola);
 
         Matrix4f matrix = new Matrix4f()
                 .translate(-4f, 2f, -2f)
@@ -102,7 +102,7 @@ public class Game {
         ciencola.setModel(matrix);
 
         ciencola = new Geometry(Geometries.CIENCOLA);
-        //this.scene.getGeometries().add(ciencola);
+        this.scene.getGeometries().add(ciencola);
 
         matrix = new Matrix4f()
                 .translate(0f, 0.595f, -5f)
@@ -191,10 +191,11 @@ public class Game {
 
             DebugCounter c = new DebugCounter();
             c.markStart("ray");
-            RayResult[] result = Geometry.testRay(origin, direction, this.scene.getGeometries());
+            RayResult[] result = Geometry.testRay(origin, this.scene.getSunDirectionInverted(), this.scene.getGeometries());
             if (result.length != 0) {
                 this.ray = result[0];
             }
+            System.out.println(this.ray);
             c.markEnd("ray");
             c.print();
         }
@@ -206,7 +207,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1024);
+                this.status = BakedLighting.bake(this.scene, 256);
             }
         }
     }

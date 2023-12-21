@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import org.joml.Intersectionf;
 import org.joml.RayAabIntersection;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -42,13 +43,13 @@ import org.joml.Vector3fc;
  */
 public class BVH implements Aab {
 
-    public static final float EPSILON = 0.002f;
-
     public static BVH create(float[] vertices, int vertexSize, int xyzOffset, int[] indices) {
         if (vertices.length == 0) {
             return new BVH(vertices, vertexSize, xyzOffset, new Vector3f(), new Vector3f());
         }
         
+        final float aabOffset = 0.0001f;
+
         BVH[] currentArray = new BVH[indices.length / 3];
         for (int i = 0; i < indices.length; i += 3) {
             int v0 = (indices[i + 0] * vertexSize) + xyzOffset;
@@ -61,10 +62,25 @@ public class BVH implements Aab {
             float maxX = Math.max(vertices[v0 + 0], Math.max(vertices[v1 + 0], vertices[v2 + 0]));
             float maxY = Math.max(vertices[v0 + 1], Math.max(vertices[v1 + 1], vertices[v2 + 1]));
             float maxZ = Math.max(vertices[v0 + 2], Math.max(vertices[v1 + 2], vertices[v2 + 2]));
-
+            
+            if (Math.abs(maxX - minX) < aabOffset) {
+                minX -= aabOffset;
+                maxX += aabOffset;
+            }
+            
+            if (Math.abs(maxY - minY) < aabOffset) {
+                minY -= aabOffset;
+                maxY += aabOffset;
+            }
+            
+            if (Math.abs(maxZ - minZ) < aabOffset) {
+                minZ -= aabOffset;
+                maxZ += aabOffset;
+            }
+            
             BVH e = new BVH(vertices, vertexSize, xyzOffset,
-                    minX - EPSILON, minY - EPSILON, minZ - EPSILON,
-                    maxX + EPSILON, maxY + EPSILON, maxZ + EPSILON
+                    minX, minY, minZ,
+                    maxX, maxY, maxZ
             );
             e.amountOfIndices = 3;
             e.indices = new int[]{indices[i + 0], indices[i + 1], indices[i + 2]};
@@ -138,10 +154,10 @@ public class BVH implements Aab {
     private final float[] vertices;
     private final int vertexSize;
     private final int xyzOffset;
-    
+
     private final Vector3f min = new Vector3f();
     private final Vector3f max = new Vector3f();
-    
+
     private BVH parent;
     private BVH left;
     private BVH right;
@@ -211,6 +227,7 @@ public class BVH implements Aab {
     }
 
     private class Triangle {
+
         private int i0;
         private int i1;
         private int i2;
@@ -244,65 +261,64 @@ public class BVH implements Aab {
             hash = 47 * hash + this.i2;
             return hash;
         }
-        
+
     }
-    
+
     public List<LocalRayResult> testRay(Vector3fc localOrigin, Vector3fc localDirection) {
-        RayAabIntersection aabTest = new RayAabIntersection(localOrigin.x(), localOrigin.y(), localOrigin.z(), localDirection.x(), localDirection.y(), localDirection.z());
         List<LocalRayResult> results = new ArrayList<>();
-        
+
         Set<Triangle> tested = new HashSet<>();
-        
+
         Triangle check = new Triangle();
         Vector3f hitpoint = new Vector3f();
-        
+
         Vector3f a = new Vector3f();
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
-        
+
         Vector3f ba = new Vector3f();
         Vector3f ca = new Vector3f();
         Vector3f cross = new Vector3f();
-        
+
         Queue<BVH> queue = new ArrayDeque<>();
         List<BVH> next = new ArrayList<>();
 
         queue.add(this);
-        
+
         do {
             BVH e;
             while ((e = queue.poll()) != null) {
-                if (aabTest.test(e.getMin().x(), e.getMin().y(), e.getMin().z(), e.getMax().x(), e.getMax().y(), e.getMax().z())) {
+                if (Intersectionf.testRayAab(localOrigin, localDirection, e.getMin(), e.getMax())) {
                     if (e.getLeft() == null && e.getRight() == null) {
                         int[] nodeIndices = e.getIndices();
                         for (int i = 0; i < nodeIndices.length; i += 3) {
                             int i0 = nodeIndices[i + 0];
                             int i1 = nodeIndices[i + 1];
                             int i2 = nodeIndices[i + 2];
-                            
+
                             check.i0 = i0;
                             check.i1 = i1;
                             check.i2 = i2;
-                            
+
                             if (!tested.contains(check)) {
                                 Triangle f = new Triangle();
                                 f.i0 = i0;
                                 f.i1 = i1;
                                 f.i2 = i2;
                                 tested.add(f);
-                                
+
                                 a.set(this.vertices[(i0 * vertexSize) + xyzOffset + 0], this.vertices[(i0 * vertexSize) + xyzOffset + 1], this.vertices[(i0 * vertexSize) + xyzOffset + 2]);
                                 b.set(this.vertices[(i1 * vertexSize) + xyzOffset + 0], this.vertices[(i1 * vertexSize) + xyzOffset + 1], this.vertices[(i1 * vertexSize) + xyzOffset + 2]);
                                 c.set(this.vertices[(i2 * vertexSize) + xyzOffset + 0], this.vertices[(i2 * vertexSize) + xyzOffset + 1], this.vertices[(i2 * vertexSize) + xyzOffset + 2]);
-                                
+
                                 float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
                                 if (hit >= 0f) {
                                     ba.set(b).sub(a).normalize();
                                     ca.set(c).sub(a).normalize();
                                     cross.set(ba).cross(ca).normalize();
-                                    
+
                                     boolean frontFace = cross.dot(localDirection) < 0f;
-                                    
+
                                     hitpoint.set(localDirection).mul(hit).add(localOrigin);
                                     results.add(new LocalRayResult(localOrigin, localDirection, hitpoint, i0, i1, i2, frontFace));
                                 }
