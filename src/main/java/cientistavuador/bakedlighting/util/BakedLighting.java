@@ -46,6 +46,7 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.joml.Vector3i;
+import org.joml.Vector3ic;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.EXTTextureCompressionS3TC;
 import org.lwjgl.opengl.GL;
@@ -65,7 +66,7 @@ public class BakedLighting {
         private final Vector3f sunDirection = new Vector3f(-1f, -0.75f, 0.5f).normalize();
         private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
         private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
-        private final Vector3f sunAmbientColor = new Vector3f(0.2f, 0.2f, 0.2f);
+        private final Vector3f sunAmbientColor = new Vector3f(0.2f, 0.2f, 0.35f);
 
         public Scene() {
 
@@ -237,7 +238,7 @@ public class BakedLighting {
         return status;
     }
 
-    public static final int INDIRECT_BOUNCES = 4;
+    public static final int INDIRECT_BOUNCES = 8;
     public static final int INDIRECT_RAYS_PER_SAMPLE = 4;
 
     private static final float[] SAMPLE_POSITIONS = {
@@ -836,6 +837,37 @@ public class BakedLighting {
         }
     }
 
+    private void randomWeights(int pixelX, int pixelY, int sample, Vector3ic triangle, Vector3f outWeights) {
+        int i0 = triangle.x();
+        int i1 = triangle.y();
+        int i2 = triangle.z();
+
+        float sampleX = SAMPLE_POSITIONS[(sample * 2) + 0];
+        float sampleY = SAMPLE_POSITIONS[(sample * 2) + 1];
+
+        float pX = pixelX + sampleX;
+        float pY = pixelY + sampleY;
+
+        float v0x = this.lightmapVertices[(i0 * 2) + 0] * this.geometryLightmapSize;
+        float v0y = this.lightmapVertices[(i0 * 2) + 1] * this.geometryLightmapSize;
+
+        float v1x = this.lightmapVertices[(i1 * 2) + 0] * this.geometryLightmapSize;
+        float v1y = this.lightmapVertices[(i1 * 2) + 1] * this.geometryLightmapSize;
+
+        float v2x = this.lightmapVertices[(i2 * 2) + 0] * this.geometryLightmapSize;
+        float v2y = this.lightmapVertices[(i2 * 2) + 1] * this.geometryLightmapSize;
+
+        do {
+            RasterUtils.barycentricWeights(
+                    (float) (pX + (Math.random() - 0.5)), (float) (pY + (Math.random() - 0.5)), 0f,
+                    v0x, v0y, 0f,
+                    v1x, v1y, 0f,
+                    v2x, v2y, 0f,
+                    outWeights
+            );
+        } while (outWeights.x() < 0 || outWeights.y() < 0 || outWeights.z() < 0);
+    }
+
     private void processSample(
             int pixelX,
             int pixelY,
@@ -853,12 +885,23 @@ public class BakedLighting {
         for (int j = 0; j < INDIRECT_RAYS_PER_SAMPLE; j++) {
             Vector3f indirectLight = new Vector3f();
             List<Vector3f> bounceColor = new ArrayList<>();
-            Vector3f bounceDir = TBN.transform(new Vector3f().set((Math.random() - 0.5f) * 2.0, (Math.random() - 0.5f) * 2.0, 1f).normalize());
-            Vector3f bouncePos = new Vector3f(position);
+            Vector3f bounceDir = TBN.transform(new Vector3f().set(
+                    Math.random() - 0.5f,
+                    Math.random() - 0.5f,
+                    Math.random()
+            ).normalize());
 
             Vector3f hitWeights = new Vector3f();
             Vector3f hitNormal = new Vector3f();
             float[] colorOutput = new float[4];
+
+            randomWeights(pixelX, pixelY, sample, triangle, hitWeights);
+            Vector3f bouncePos = new Vector3f(
+                    lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 0),
+                    lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 1),
+                    lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 2)
+            );
+            this.geometry.getModel().transformProject(bouncePos);
 
             Vector3i hitTriangle = new Vector3i(triangle);
             Geometry hitGeometry = this.geometry;
@@ -951,7 +994,135 @@ public class BakedLighting {
     }
 
     private void denoiseIndirectBuffer() {
-        //todo
+        final ColorBuffer output = new ColorBuffer(this.geometryLightmapSize);
+
+        Vector3f weights = new Vector3f();
+        Vector3f color = new Vector3f();
+
+        for (int i = 0; i < this.indices.length; i += 3) {
+            int i0 = this.indices[i + 0];
+            int i1 = this.indices[i + 1];
+            int i2 = this.indices[i + 2];
+
+            float v0x = this.lightmapVertices[(i0 * 2) + 0] * this.geometryLightmapSize;
+            float v0y = this.lightmapVertices[(i0 * 2) + 1] * this.geometryLightmapSize;
+
+            float v1x = this.lightmapVertices[(i1 * 2) + 0] * this.geometryLightmapSize;
+            float v1y = this.lightmapVertices[(i1 * 2) + 1] * this.geometryLightmapSize;
+
+            float v2x = this.lightmapVertices[(i2 * 2) + 0] * this.geometryLightmapSize;
+            float v2y = this.lightmapVertices[(i2 * 2) + 1] * this.geometryLightmapSize;
+
+            int minX = (int) Math.floor(Math.min(v0x, Math.min(v1x, v2x)));
+            int minY = (int) Math.floor(Math.min(v0y, Math.min(v1y, v2y)));
+            int maxX = (int) Math.ceil(Math.max(v0x, Math.max(v1x, v2x)));
+            int maxY = (int) Math.ceil(Math.max(v0y, Math.max(v1y, v2y)));
+
+            minX = clamp(minX, 0, this.geometryLightmapSize - 1);
+            minY = clamp(minY, 0, this.geometryLightmapSize - 1);
+            maxX = clamp(maxX, 0, this.geometryLightmapSize - 1);
+            maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
+
+            final int width = (maxX + 1) - minX;
+            final int height = (maxY + 1) - minY;
+            final int xOffset = minX;
+            final int yOffset = minY;
+            final boolean[] boundsMap = new boolean[width * height];
+            final float[] colorMap = new float[(width * height) * 3];
+
+            for (int y = minY; y <= maxY; y++) {
+                for (int x = minX; x <= maxX; x++) {
+                    float r = 0f;
+                    float g = 0f;
+                    float b = 0f;
+                    int sampleCount = 0;
+                    for (int s = 0; s < SAMPLES; s++) {
+                        float sampleX = SAMPLE_POSITIONS[(s * 2) + 0];
+                        float sampleY = SAMPLE_POSITIONS[(s * 2) + 1];
+
+                        float pixelX = sampleX + x;
+                        float pixelY = sampleY + y;
+
+                        RasterUtils.barycentricWeights(
+                                pixelX, pixelY, 0f,
+                                v0x, v0y, 0f,
+                                v1x, v1y, 0f,
+                                v2x, v2y, 0f,
+                                weights
+                        );
+
+                        float wx = weights.x();
+                        float wy = weights.y();
+                        float wz = weights.z();
+
+                        if (wx < 0f || wy < 0f || wz < 0f) {
+                            continue;
+                        }
+
+                        this.indirectColorBuffer.read(color, x, y, s);
+                        r += color.x();
+                        g += color.y();
+                        b += color.z();
+                        sampleCount++;
+                    }
+                    if (sampleCount != 0) {
+                        float invSampleCount = 1f / sampleCount;
+                        r *= invSampleCount;
+                        g *= invSampleCount;
+                        b *= invSampleCount;
+
+                        int localX = x - xOffset;
+                        int localY = y - yOffset;
+
+                        colorMap[(localX * 3) + (localY * width * 3) + 0] = r;
+                        colorMap[(localX * 3) + (localY * width * 3) + 1] = g;
+                        colorMap[(localX * 3) + (localY * width * 3) + 2] = b;
+                        boundsMap[localX + (localY * width)] = true;
+                    }
+                }
+            }
+
+            Denoiser.DenoiserIO denoiserIO = new Denoiser.DenoiserIO() {
+                private final Vector3f vec = new Vector3f();
+
+                @Override
+                public int width() {
+                    return width;
+                }
+
+                @Override
+                public int height() {
+                    return height;
+                }
+
+                @Override
+                public boolean outOfBounds(int x, int y) {
+                    if (x < 0 || y < 0 || x >= width || y >= height) {
+                        return true;
+                    }
+                    return !boundsMap[x + (y * width)];
+                }
+
+                @Override
+                public void write(int x, int y, Denoiser.DenoiserColor color) {
+                    this.vec.set(color.r, color.g, color.b);
+                    for (int s = 0; s < SAMPLES; s++) {
+                        output.write(this.vec, xOffset + x, yOffset + y, s);
+                    }
+                }
+
+                @Override
+                public void read(int x, int y, Denoiser.DenoiserColor color) {
+                    color.r = colorMap[(x * 3) + (y * width * 3) + 0];
+                    color.g = colorMap[(x * 3) + (y * width * 3) + 1];
+                    color.b = colorMap[(x * 3) + (y * width * 3) + 2];
+                }
+            };
+            
+            Denoiser.denoise(denoiserIO, 11, true, 21, 0.25f);
+        }
+
+        this.indirectColorBuffer = output;
     }
 
     private void sumColorBuffersAndOutput() {
@@ -963,8 +1134,8 @@ public class BakedLighting {
 
         this.status.setProgressBarStep(this.geometryLightmapSize);
         for (int y = 0; y < this.geometryLightmapSize; y++) {
-            setStatusText("Writing to Output Buffer ("+y+"/"+this.geometryLightmapSize+")");
-            
+            setStatusText("Writing to Output Buffer (" + y + "/" + this.geometryLightmapSize + ")");
+
             for (int x = 0; x < this.geometryLightmapSize; x++) {
                 int processedPixels = 0;
                 for (int s = 0; s < SAMPLES; s++) {
@@ -995,7 +1166,7 @@ public class BakedLighting {
                 }
 
                 direct.add(indirect);
-                direct.set(indirect);
+                //direct.set(indirect);
 
                 int rColor = Math.min((int) (direct.x() * 255f), 255);
                 int gColor = Math.min((int) (direct.y() * 255f), 255);
@@ -1006,7 +1177,7 @@ public class BakedLighting {
                 lineColorData[(x * 3) + 2] = (byte) bColor;
             }
             this.outputBuffer.put(y * this.geometryLightmapSize * 3, lineColorData);
-            
+
             this.status.stepProgressBar();
         }
 
