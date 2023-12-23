@@ -47,7 +47,6 @@ import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.joml.Vector3i;
 import org.joml.Vector3ic;
-import org.joml.Vector4f;
 import org.lwjgl.opengl.EXTTextureCompressionS3TC;
 import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL33C.*;
@@ -63,7 +62,7 @@ public class BakedLighting {
 
         private final List<Geometry> geometries = new ArrayList<>();
 
-        private final Vector3f sunDirection = new Vector3f(0f, -1f, -1f).normalize();
+        private final Vector3f sunDirection = new Vector3f(0.5f, -1f, -1f).normalize();
         private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
         private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
         private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.6f);
@@ -125,7 +124,8 @@ public class BakedLighting {
         private String currentStatus = "Idle";
         private float currentProgress = 0f;
         private boolean error = false;
-
+        private long memoryUsage = 0;
+        
         private float progressBarStep = 0f;
 
         private long timeStart = 0;
@@ -205,6 +205,35 @@ public class BakedLighting {
             b.append(" Rays Per Second");
             return b.toString();
         }
+
+        public long getMemoryUsage() {
+            return memoryUsage;
+        }
+        
+        public String getMemoryUsageFormatted() {
+            int unit = 0;
+            long memory = this.memoryUsage;
+            for (int i = 0; i < Integer.MAX_VALUE; i++) {
+                memory /= 1000;
+                if (memory > 0) {
+                    unit++;
+                } else {
+                    break;
+                }
+            }
+            memory = this.memoryUsage;
+            String value = String.format("%.2f", memory / Math.pow(1000.0, unit));
+            switch (unit) {
+                case 0 -> value += " B";
+                case 1 -> value += " KB";
+                case 2 -> value += " MB";
+                case 3 -> value += " GB";
+                case 4 -> value += " TB";
+                default -> value += " * "+Math.pow(1000.0, unit)+" B";
+            }
+            return value;
+        }
+        
     }
 
     public static Status dummyStatus() {
@@ -238,7 +267,7 @@ public class BakedLighting {
         return status;
     }
 
-    public static final int INDIRECT_BOUNCES = 8;
+    public static final int INDIRECT_BOUNCES = 4;
     public static final int INDIRECT_RAYS_PER_SAMPLE = 4;
 
     private static final float[] SAMPLE_POSITIONS = {
@@ -373,7 +402,6 @@ public class BakedLighting {
 
     private static class ColorBuffer {
 
-        private final int size;
         private final int lineSize;
         private final int sampleSize;
         private final int vectorSize;
@@ -384,30 +412,18 @@ public class BakedLighting {
             this.vectorSize = this.sampleSize * SAMPLES;
             this.lineSize = size * this.vectorSize;
             this.data = new byte[size * this.lineSize];
-            this.size = size;
         }
 
         public void write(Vector3f color, int x, int y, int sample) {
-            int vx = Math.min((int) (color.x() * 255f), 255);
-            int vy = Math.min((int) (color.y() * 255f), 255);
-            int vz = Math.min((int) (color.z() * 255f), 255);
+            int vx = (int) (color.x() * 255f);
+            int vy = (int) (color.y() * 255f);
+            int vz = (int) (color.z() * 255f);
             this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) vx;
             this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) vy;
             this.data[2 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) vz;
         }
 
         public void read(Vector3f color, int x, int y, int sample) {
-            if (x >= this.size) {
-                x = this.size - 1;
-            } else if (x < 0) {
-                x = 0;
-            }
-            if (y >= this.size) {
-                y = this.size - 1;
-            } else if (y < 0) {
-                y = 0;
-            }
-
             byte vx = this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
             byte vy = this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
             byte vz = this.data[2 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
@@ -441,6 +457,7 @@ public class BakedLighting {
     private float[] vertices = null;
     private int[] indices = null;
     private float[] lightmapVertices = null;
+    private int[] denoiserQuads = null;
 
     private BooleanBuffer sampleBuffer = null;
     private IndicesBuffer indicesBuffer = null;
@@ -616,6 +633,10 @@ public class BakedLighting {
                 .getMesh()
                 .getLightmapMesh(this.geometryLightmapSize)
                 .getLightmapUVsBake();
+        this.denoiserQuads = this.geometry
+                .getMesh()
+                .getLightmapMesh(this.geometryLightmapSize)
+                .getDenoiserQuads();
 
         this.sampleBuffer = new BooleanBuffer(this.geometryLightmapSize);
         this.indicesBuffer = new IndicesBuffer(this.geometryLightmapSize);
@@ -676,14 +697,14 @@ public class BakedLighting {
 
             indicesVector.set(i0, i1, i2);
 
-            float v0x = this.lightmapVertices[(i0 * 2) + 0] * this.geometryLightmapSize;
-            float v0y = this.lightmapVertices[(i0 * 2) + 1] * this.geometryLightmapSize;
+            float v0x = this.lightmapVertices[(i0 * 2) + 0];
+            float v0y = this.lightmapVertices[(i0 * 2) + 1];
 
-            float v1x = this.lightmapVertices[(i1 * 2) + 0] * this.geometryLightmapSize;
-            float v1y = this.lightmapVertices[(i1 * 2) + 1] * this.geometryLightmapSize;
+            float v1x = this.lightmapVertices[(i1 * 2) + 0];
+            float v1y = this.lightmapVertices[(i1 * 2) + 1];
 
-            float v2x = this.lightmapVertices[(i2 * 2) + 0] * this.geometryLightmapSize;
-            float v2y = this.lightmapVertices[(i2 * 2) + 1] * this.geometryLightmapSize;
+            float v2x = this.lightmapVertices[(i2 * 2) + 0];
+            float v2y = this.lightmapVertices[(i2 * 2) + 1];
 
             a.set(v0x, v0y, 0f);
             b.set(v1x, v1y, 0f);
@@ -804,13 +825,7 @@ public class BakedLighting {
         Vector3f outColor = new Vector3f();
         Vector3f outIndirectColor = new Vector3f();
 
-        Vector3f colorAverage = new Vector3f();
-
-        int lastValidX = -1;
         for (int x = 0; x < this.geometryLightmapSize; x++) {
-            colorAverage.zero();
-
-            int pixelsProcessed = 0;
             for (int s = 0; s < SAMPLES; s++) {
                 boolean filled = this.sampleBuffer.read(x, y, s);
                 if (!filled) {
@@ -828,11 +843,19 @@ public class BakedLighting {
                 outIndirectColor.zero();
                 processSample(x, y, s, triangle, position, normal, tangent, outColor, outIndirectColor);
 
+                outColor.set(
+                        Math.min(Math.max(outColor.x(), 0f), 1f),
+                        Math.min(Math.max(outColor.y(), 0f), 1f),
+                        Math.min(Math.max(outColor.z(), 0f), 1f)
+                );
+                outIndirectColor.set(
+                        Math.min(Math.max(outIndirectColor.x(), 0f), 1f),
+                        Math.min(Math.max(outIndirectColor.y(), 0f), 1f),
+                        Math.min(Math.max(outIndirectColor.z(), 0f), 1f)
+                );
+
                 this.indirectColorBuffer.write(outIndirectColor, x, y, s);
                 this.directColorBuffer.write(outColor, x, y, s);
-
-                colorAverage.add(outColor);
-                pixelsProcessed++;
             }
         }
     }
@@ -848,14 +871,14 @@ public class BakedLighting {
         float pX = pixelX + sampleX;
         float pY = pixelY + sampleY;
 
-        float v0x = this.lightmapVertices[(i0 * 2) + 0] * this.geometryLightmapSize;
-        float v0y = this.lightmapVertices[(i0 * 2) + 1] * this.geometryLightmapSize;
+        float v0x = this.lightmapVertices[(i0 * 2) + 0];
+        float v0y = this.lightmapVertices[(i0 * 2) + 1];
 
-        float v1x = this.lightmapVertices[(i1 * 2) + 0] * this.geometryLightmapSize;
-        float v1y = this.lightmapVertices[(i1 * 2) + 1] * this.geometryLightmapSize;
+        float v1x = this.lightmapVertices[(i1 * 2) + 0];
+        float v1y = this.lightmapVertices[(i1 * 2) + 1];
 
-        float v2x = this.lightmapVertices[(i2 * 2) + 0] * this.geometryLightmapSize;
-        float v2y = this.lightmapVertices[(i2 * 2) + 1] * this.geometryLightmapSize;
+        float v2x = this.lightmapVertices[(i2 * 2) + 0];
+        float v2y = this.lightmapVertices[(i2 * 2) + 1];
 
         do {
             RasterUtils.barycentricWeights(
@@ -996,145 +1019,151 @@ public class BakedLighting {
     private void denoiseIndirectBuffer() {
         final ColorBuffer output = new ColorBuffer(this.geometryLightmapSize);
 
-        Vector3f weights = new Vector3f();
-        Vector3f color = new Vector3f();
-        
-        this.status.setProgressBarStep(this.indices.length);
-        for (int i = 0; i < this.indices.length; i += 3) {
-            setStatusText("Denoising ("+i+"/"+this.indices.length+")");
-            
-            int i0 = this.indices[i + 0];
-            int i1 = this.indices[i + 1];
-            int i2 = this.indices[i + 2];
+        int amountOfCores = Runtime.getRuntime().availableProcessors();
+        ExecutorService service = Executors.newFixedThreadPool(amountOfCores);
+        List<Future<?>> tasks = new ArrayList<>(amountOfCores);
 
-            float v0x = this.lightmapVertices[(i0 * 2) + 0] * this.geometryLightmapSize;
-            float v0y = this.lightmapVertices[(i0 * 2) + 1] * this.geometryLightmapSize;
+        this.status.setProgressBarStep(this.denoiserQuads.length);
+        for (int i = 0; i < this.denoiserQuads.length; i += (4 * amountOfCores)) {
+            setStatusText("Denoising (" + i + "/" + this.denoiserQuads.length + ")");
 
-            float v1x = this.lightmapVertices[(i1 * 2) + 0] * this.geometryLightmapSize;
-            float v1y = this.lightmapVertices[(i1 * 2) + 1] * this.geometryLightmapSize;
+            for (int j = 0; j < amountOfCores; j++) {
+                int quad = i + (j * 4);
+                if (quad >= this.denoiserQuads.length) {
+                    break;
+                }
+                tasks.add(service.submit(() -> {
+                    denoiseIndirectBufferQuad(output, quad);
+                }));
+            }
 
-            float v2x = this.lightmapVertices[(i2 * 2) + 0] * this.geometryLightmapSize;
-            float v2y = this.lightmapVertices[(i2 * 2) + 1] * this.geometryLightmapSize;
-
-            int minX = (int) Math.floor(Math.min(v0x, Math.min(v1x, v2x)));
-            int minY = (int) Math.floor(Math.min(v0y, Math.min(v1y, v2y)));
-            int maxX = (int) Math.ceil(Math.max(v0x, Math.max(v1x, v2x)));
-            int maxY = (int) Math.ceil(Math.max(v0y, Math.max(v1y, v2y)));
-
-            minX = clamp(minX, 0, this.geometryLightmapSize - 1);
-            minY = clamp(minY, 0, this.geometryLightmapSize - 1);
-            maxX = clamp(maxX, 0, this.geometryLightmapSize - 1);
-            maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
-
-            final int width = (maxX + 1) - minX;
-            final int height = (maxY + 1) - minY;
-            final int xOffset = minX;
-            final int yOffset = minY;
-            final boolean[] boundsMap = new boolean[width * height];
-            final float[] colorMap = new float[(width * height) * 3];
-
-            for (int y = minY; y <= maxY; y++) {
-                for (int x = minX; x <= maxX; x++) {
-                    float r = 0f;
-                    float g = 0f;
-                    float b = 0f;
-                    int sampleCount = 0;
-                    for (int s = 0; s < SAMPLES; s++) {
-                        float sampleX = SAMPLE_POSITIONS[(s * 2) + 0];
-                        float sampleY = SAMPLE_POSITIONS[(s * 2) + 1];
-
-                        float pixelX = sampleX + x;
-                        float pixelY = sampleY + y;
-
-                        RasterUtils.barycentricWeights(
-                                pixelX, pixelY, 0f,
-                                v0x, v0y, 0f,
-                                v1x, v1y, 0f,
-                                v2x, v2y, 0f,
-                                weights
-                        );
-
-                        float wx = weights.x();
-                        float wy = weights.y();
-                        float wz = weights.z();
-
-                        if (wx < 0f || wy < 0f || wz < 0f) {
-                            continue;
-                        }
-
-                        this.indirectColorBuffer.read(color, x, y, s);
-                        r += color.x();
-                        g += color.y();
-                        b += color.z();
-                        sampleCount++;
-                    }
-                    if (sampleCount != 0) {
-                        float invSampleCount = 1f / sampleCount;
-                        r *= invSampleCount;
-                        g *= invSampleCount;
-                        b *= invSampleCount;
-
-                        int localX = x - xOffset;
-                        int localY = y - yOffset;
-
-                        colorMap[(localX * 3) + (localY * width * 3) + 0] = r;
-                        colorMap[(localX * 3) + (localY * width * 3) + 1] = g;
-                        colorMap[(localX * 3) + (localY * width * 3) + 2] = b;
-                        boundsMap[localX + (localY * width)] = true;
-                    }
+            for (Future<?> f : tasks) {
+                try {
+                    f.get();
+                } catch (InterruptedException | ExecutionException ex) {
+                    throw new RuntimeException(ex);
+                }
+                for (int j = 0; j < 4; j++) {
+                    this.status.stepProgressBar();
                 }
             }
 
-            Denoiser.DenoiserIO denoiserIO = new Denoiser.DenoiserIO() {
-                private final Vector3f vec = new Vector3f();
-
-                @Override
-                public int width() {
-                    return width;
-                }
-
-                @Override
-                public int height() {
-                    return height;
-                }
-
-                @Override
-                public boolean outOfBounds(int x, int y) {
-                    if (x < 0 || y < 0 || x >= width || y >= height) {
-                        return true;
-                    }
-                    return !boundsMap[x + (y * width)];
-                }
-
-                @Override
-                public void write(int x, int y, Denoiser.DenoiserColor color) {
-                    this.vec.set(color.r, color.g, color.b);
-                    for (int s = 0; s < SAMPLES; s++) {
-                        output.write(this.vec, xOffset + x, yOffset + y, s);
-                    }
-                }
-
-                @Override
-                public void read(int x, int y, Denoiser.DenoiserColor color) {
-                    color.r = colorMap[(x * 3) + (y * width * 3) + 0];
-                    color.g = colorMap[(x * 3) + (y * width * 3) + 1];
-                    color.b = colorMap[(x * 3) + (y * width * 3) + 2];
-                }
-            };
-            
-            Denoiser.denoise(denoiserIO, 9, true, 9, 0.25f, false);
-            
-            for (int j = 0; j < 3; j++) {
-                this.status.stepProgressBar();
-            }
+            tasks.clear();
         }
 
         this.indirectColorBuffer = output;
     }
 
+    private void denoiseIndirectBufferQuad(ColorBuffer output, int i) {
+        Vector3f color = new Vector3f();
+
+        int minX = clamp(this.denoiserQuads[i + 0], 0, this.geometryLightmapSize);
+        int minY = clamp(this.denoiserQuads[i + 1], 0, this.geometryLightmapSize);
+        int maxX = clamp(this.denoiserQuads[i + 2], 0, this.geometryLightmapSize);
+        int maxY = clamp(this.denoiserQuads[i + 3], 0, this.geometryLightmapSize);
+
+        final int width = maxX - minX;
+        final int height = maxY - minY;
+        final int xOffset = minX;
+        final int yOffset = minY;
+        final boolean[] sampleMap = new boolean[width * height * SAMPLES];
+        final boolean[] boundsMap = new boolean[width * height];
+        final float[] colorMap = new float[width * height * 3];
+
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+
+        for (int y = minY; y < maxY; y++) {
+            for (int x = minX; x < maxX; x++) {
+                float r = 0f;
+                float g = 0f;
+                float b = 0f;
+                int sampleCount = 0;
+                for (int s = 0; s < SAMPLES; s++) {
+                    if (!this.sampleBuffer.read(x, y, s)) {
+                        continue;
+                    }
+
+                    this.indirectColorBuffer.read(color, x, y, s);
+                    r += color.x();
+                    g += color.y();
+                    b += color.z();
+                    sampleCount++;
+
+                    sampleMap[s + ((x - xOffset) * SAMPLES) + ((y - yOffset) * width * SAMPLES)] = true;
+                }
+                if (sampleCount != 0) {
+                    float invSampleCount = 1f / sampleCount;
+                    r *= invSampleCount;
+                    g *= invSampleCount;
+                    b *= invSampleCount;
+
+                    int localX = x - xOffset;
+                    int localY = y - yOffset;
+
+                    colorMap[(localX * 3) + (localY * width * 3) + 0] = r;
+                    colorMap[(localX * 3) + (localY * width * 3) + 1] = g;
+                    colorMap[(localX * 3) + (localY * width * 3) + 2] = b;
+                    boundsMap[localX + (localY * width)] = true;
+                }
+            }
+        }
+
+        Denoiser.DenoiserIO denoiserIO = new Denoiser.DenoiserIO() {
+            private final Vector3f ioColor = new Vector3f();
+
+            @Override
+            public int width() {
+                return width;
+            }
+
+            @Override
+            public int height() {
+                return height;
+            }
+
+            @Override
+            public boolean outOfBounds(int x, int y) {
+                if (x < 0 || y < 0 || x >= width || y >= height) {
+                    return true;
+                }
+                return !boundsMap[x + (y * width)];
+            }
+
+            @Override
+            public void write(int x, int y, Denoiser.DenoiserColor color) {
+                this.ioColor.set(color.r, color.g, color.b);
+                for (int s = 0; s < SAMPLES; s++) {
+                    if (sampleMap[s + (x * SAMPLES) + (y * width * SAMPLES)]) {
+                        output.write(this.ioColor, x + xOffset, y + yOffset, s);
+                    }
+                }
+            }
+
+            @Override
+            public void read(int x, int y, Denoiser.DenoiserColor color) {
+                color.r = colorMap[(x * 3) + (y * width * 3) + 0];
+                color.g = colorMap[(x * 3) + (y * width * 3) + 1];
+                color.b = colorMap[(x * 3) + (y * width * 3) + 2];
+            }
+        };
+
+        Denoiser.denoise(
+                denoiserIO,
+                17,
+                true,
+                23,
+                0.5f,
+                0.0f,
+                false
+        );
+    }
+
     private void sumColorBuffersAndOutput() {
         byte[] lineColorData = new byte[this.geometryLightmapSize * 3];
 
+        Vector3f lastValidAverage = new Vector3f();
         Vector3f direct = new Vector3f();
         Vector3f indirect = new Vector3f();
         Vector3f sampleAverage = new Vector3f();
@@ -1142,26 +1171,27 @@ public class BakedLighting {
         this.status.setProgressBarStep(this.geometryLightmapSize);
         for (int y = 0; y < this.geometryLightmapSize; y++) {
             setStatusText("Writing to Output Buffer (" + y + "/" + this.geometryLightmapSize + ")");
-
+            
+            lastValidAverage.zero();
             for (int x = 0; x < this.geometryLightmapSize; x++) {
-                int processedPixels = 0;
+                int processedSamples = 0;
                 for (int s = 0; s < SAMPLES; s++) {
                     if (this.sampleBuffer.read(x, y, s)) {
-                        processedPixels++;
+                        processedSamples++;
                     }
                 }
 
                 direct.zero();
                 indirect.zero();
 
-                if (processedPixels != 0) {
+                if (processedSamples != 0) {
                     //direct
                     sampleAverage.zero();
                     for (int s = 0; s < SAMPLES; s++) {
                         this.directColorBuffer.read(direct, x, y, s);
                         sampleAverage.add(direct);
                     }
-                    direct.set(sampleAverage.div(processedPixels));
+                    direct.set(sampleAverage.div(processedSamples));
 
                     //indirect
                     sampleAverage.zero();
@@ -1169,15 +1199,21 @@ public class BakedLighting {
                         this.indirectColorBuffer.read(indirect, x, y, s);
                         sampleAverage.add(indirect);
                     }
-                    indirect.set(sampleAverage.div(processedPixels));
+                    indirect.set(sampleAverage.div(processedSamples));
+                    
+                    direct.add(indirect);
+                    
+                    lastValidAverage.set(direct);
+                } else {
+                    direct.set(lastValidAverage);
                 }
-
-                direct.add(indirect);
-                //direct.set(indirect);
 
                 int rColor = Math.min((int) (direct.x() * 255f), 255);
                 int gColor = Math.min((int) (direct.y() * 255f), 255);
                 int bColor = Math.min((int) (direct.z() * 255f), 255);
+                rColor = Math.max(rColor, 0);
+                gColor = Math.max(gColor, 0);
+                bColor = Math.max(bColor, 0);
 
                 lineColorData[(x * 3) + 0] = (byte) rColor;
                 lineColorData[(x * 3) + 1] = (byte) gColor;
@@ -1207,6 +1243,9 @@ public class BakedLighting {
             int internalFormat = GL_RGB8;
             if (GL.getCapabilities().GL_EXT_texture_compression_s3tc) {
                 internalFormat = EXTTextureCompressionS3TC.GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
+                this.status.memoryUsage += (lightmapSizeCopy * lightmapSizeCopy) / 2;
+            } else {
+                this.status.memoryUsage += lightmapSizeCopy * lightmapSizeCopy * 3;
             }
             glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, lightmapSizeCopy, lightmapSizeCopy, 0, GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy);
 
@@ -1223,7 +1262,7 @@ public class BakedLighting {
 
             outputBufferCleanableCopy.clean();
         });
-
+        
         this.status.currentProgress = 100f;
     }
 

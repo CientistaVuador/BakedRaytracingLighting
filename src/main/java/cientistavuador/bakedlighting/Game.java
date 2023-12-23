@@ -95,9 +95,9 @@ public class Game {
         this.scene.getGeometries().add(ciencola);
 
         Matrix4f matrix = new Matrix4f()
-                .translate(-4f, 2f, -2f)
+                .translate(-7f, 1f, -2f)
                 .scale(1f, 1.2f, 1f)
-                .rotateZ((float) Math.toRadians(45f));
+                ;
 
         ciencola.setModel(matrix);
 
@@ -166,6 +166,7 @@ public class Game {
             .append(this.status.getASCIIProgressBar()).append('\n')
             .append("Status: ").append(this.status.getCurrentStatus()).append('\n')
             .append(this.status.getRaysPerSecondFormatted()).append('\n')
+            .append("Video Memory Used By Lightmaps: ").append(this.status.getMemoryUsageFormatted()).append('\n')
             .append("FPS: ").append(Main.FPS).append('\n')
             .toString()
         };
@@ -207,7 +208,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 256);
+                this.status = BakedLighting.bake(this.scene, 512);
             }
         }
     }

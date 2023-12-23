@@ -210,7 +210,7 @@ public class MeshUtils {
         return new Pair<>(unindexedVertices, unindexedIndices);
     }
     
-    public static Pair<float[], float[]> generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
+    public static LightmapUVGenerator.LightmapUVGeneratorOutput generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
         return LightmapUVGenerator.generateLightmapUV(vertices, vertexSize, xyzOffset, lightmapSize);
     }
     

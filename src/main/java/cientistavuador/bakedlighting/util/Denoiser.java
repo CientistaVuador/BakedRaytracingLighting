@@ -55,8 +55,8 @@ public class Denoiser {
         public void read(int x, int y, DenoiserColor color);
     }
 
-    public static void denoise(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance, boolean useGaussianWeights) {
-        new Denoiser(io, kernelSize, averageSimilar, similarSearchKernelSize, similarTolerance, useGaussianWeights).process();
+    public static void denoise(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance, float sharpnessTolerance, boolean useGaussianWeights) {
+        new Denoiser(io, kernelSize, averageSimilar, similarSearchKernelSize, similarTolerance, sharpnessTolerance, useGaussianWeights).process();
     }
 
     private final DenoiserIO io;
@@ -64,16 +64,18 @@ public class Denoiser {
     private final boolean averageSimilar;
     private final int similarSearchKernelSize;
     private final float similarTolerance;
+    private final float sharpnessTolerance;
     private final boolean useGaussianWeights;
 
     private final float[] similarSearchGaussian;
     
-    private Denoiser(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance, boolean useGaussianWeights) {
+    private Denoiser(DenoiserIO io, int kernelSize, boolean averageSimilar, int similarSearchKernelSize, float similarTolerance, float sharpnessTolerance, boolean useGaussianWeights) {
         this.io = io;
         this.kernelSize = kernelSize;
         this.averageSimilar = averageSimilar;
         this.similarSearchKernelSize = similarSearchKernelSize;
         this.similarTolerance = similarTolerance;
+        this.sharpnessTolerance = sharpnessTolerance;
         this.useGaussianWeights = useGaussianWeights;
         this.similarSearchGaussian = new float[similarSearchKernelSize * similarSearchKernelSize];
         float sum = 0f;
@@ -158,8 +160,8 @@ public class Denoiser {
         return median;
     }
     
-    public boolean compare(DenoiserColor a, DenoiserColor b) {
-        return Math.sqrt(Math.pow(a.r - b.r, 2.0) + Math.pow(a.g - b.g, 2.0) + Math.pow(a.b - b.b, 2.0)) < this.similarTolerance;
+    public boolean isSimilar(DenoiserColor a, DenoiserColor b, float tolerance) {
+        return Math.sqrt(Math.pow(a.r - b.r, 2.0) + Math.pow(a.g - b.g, 2.0) + Math.pow(a.b - b.b, 2.0)) < tolerance;
     }
 
     public void averageSimilar(DenoiserColor toFindSimilar, int xCenter, int yCenter, DenoiserColor outAverage) {
@@ -178,7 +180,7 @@ public class Denoiser {
 
                 this.io.read(pX, pY, outAverage);
 
-                if (compare(toFindSimilar, outAverage)) {
+                if (isSimilar(toFindSimilar, outAverage, this.similarTolerance)) {
                     float weight;
                     if (this.useGaussianWeights) {
                         weight = this.similarSearchGaussian[x + (y * this.similarSearchKernelSize)];
@@ -213,6 +215,8 @@ public class Denoiser {
         for (int i = 0; i < kernel.length; i++) {
             kernel[i] = new DenoiserColor();
         }
+        
+        DenoiserColor currentColor = new DenoiserColor();
 
         for (int y = 0; y < this.io.height(); y++) {
             for (int x = 0; x < this.io.width(); x++) {
@@ -229,7 +233,14 @@ public class Denoiser {
                 }
                 
                 if (this.averageSimilar) {
-                    averageSimilar(median, x, y, outAverage);
+                    this.io.read(x, y, currentColor);
+                    if (isSimilar(median, currentColor, this.sharpnessTolerance)) {
+                        outAverage.r = currentColor.r;
+                        outAverage.g = currentColor.g;
+                        outAverage.b = currentColor.b;
+                    } else {
+                        averageSimilar(median, x, y, outAverage);
+                    }
                 } else {
                     outAverage.r = median.r;
                     outAverage.g = median.g;

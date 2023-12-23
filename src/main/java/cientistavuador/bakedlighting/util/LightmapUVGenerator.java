@@ -45,7 +45,32 @@ import org.joml.Vector4i;
  */
 public class LightmapUVGenerator {
 
-    public static Pair<float[], float[]> generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
+    public static class LightmapUVGeneratorOutput {
+        private final float[] forBaking;
+        private final float[] forRendering;
+        private final int[] forDenoising;
+
+        public LightmapUVGeneratorOutput(float[] forBaking, float[] forRendering, int[] forDenoising) {
+            this.forBaking = forBaking;
+            this.forRendering = forRendering;
+            this.forDenoising = forDenoising;
+        }
+
+        public float[] forBaking() {
+            return forBaking;
+        }
+
+        public float[] forRendering() {
+            return forRendering;
+        }
+
+        public int[] forDenoising() {
+            return forDenoising;
+        }
+        
+    }
+    
+    public static LightmapUVGeneratorOutput generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
         if ((lightmapSize > 0) && ((lightmapSize & (lightmapSize - 1)) != 0)) {
             throw new IllegalArgumentException("Lightmap size is not a power of two.");
         }
@@ -56,7 +81,7 @@ public class LightmapUVGenerator {
             throw new IllegalArgumentException("Not a triangulated mesh.");
         }
         if (vertices.length == 0) {
-            return new Pair<>(new float[0], new float[0]);
+            return new LightmapUVGeneratorOutput(new float[0], new float[0], new int[0]);
         }
         return new LightmapUVGenerator(vertices, vertexSize, xyzOffset, lightmapSize).process();
     }
@@ -752,11 +777,13 @@ public class LightmapUVGenerator {
         }
     }
 
-    private Pair<float[], float[]> outputUVs() {
+    private LightmapUVGeneratorOutput outputUVs() {
         float[] forBake = new float[(this.vertices.length / this.vertexSize) * 2];
         float[] forRender = new float[(this.vertices.length / this.vertexSize) * 2];
+        int[] forDenoise = new int[this.quads.size() * 4];
 
-        for (Quad q : this.quads) {
+        for (int i = 0; i < this.quads.size(); i++) {
+            Quad q = this.quads.get(i);
             int v0 = (q.v0 / this.vertexSize) * 2;
             int v1 = (q.v1 / this.vertexSize) * 2;
             int v2 = (q.v2 / this.vertexSize) * 2;
@@ -773,15 +800,20 @@ public class LightmapUVGenerator {
 
             float maxX = q.x + q.width;
             float maxY = q.y + q.height;
+            
+            forDenoise[(i * 4) + 0] = Math.round(minX);
+            forDenoise[(i * 4) + 1] = Math.round(minY);
+            forDenoise[(i * 4) + 2] = Math.round(maxX);
+            forDenoise[(i * 4) + 3] = Math.round(maxY);
 
-            forBake[v0 + 0] = minX * invLightmapSize;
-            forBake[v0 + 1] = minY * invLightmapSize;
+            forBake[v0 + 0] = minX;
+            forBake[v0 + 1] = minY;
 
-            forBake[v1 + 0] = maxX * invLightmapSize;
-            forBake[v1 + 1] = minY * invLightmapSize;
+            forBake[v1 + 0] = maxX;
+            forBake[v1 + 1] = minY;
 
-            forBake[v2 + 0] = minX * invLightmapSize;
-            forBake[v2 + 1] = maxY * invLightmapSize;
+            forBake[v2 + 0] = minX;
+            forBake[v2 + 1] = maxY;
 
             forRender[v0 + 0] = (minX + offset) * invLightmapSize;
             forRender[v0 + 1] = (minY + offset) * invLightmapSize;
@@ -793,14 +825,14 @@ public class LightmapUVGenerator {
             forRender[v2 + 1] = (maxY - offset) * invLightmapSize;
 
             if (q.secondTriangle) {
-                forBake[sv0 + 0] = maxX * invLightmapSize;
-                forBake[sv0 + 1] = minY * invLightmapSize;
+                forBake[sv0 + 0] = maxX;
+                forBake[sv0 + 1] = minY;
 
-                forBake[sv1 + 0] = maxX * invLightmapSize;
-                forBake[sv1 + 1] = maxY * invLightmapSize;
+                forBake[sv1 + 0] = maxX;
+                forBake[sv1 + 1] = maxY;
 
-                forBake[sv2 + 0] = minX * invLightmapSize;
-                forBake[sv2 + 1] = maxY * invLightmapSize;
+                forBake[sv2 + 0] = minX;
+                forBake[sv2 + 1] = maxY;
 
                 forRender[sv0 + 0] = (maxX - offset) * invLightmapSize;
                 forRender[sv0 + 1] = (minY + offset) * invLightmapSize;
@@ -814,10 +846,10 @@ public class LightmapUVGenerator {
 
         }
 
-        return new Pair<>(forBake, forRender);
+        return new LightmapUVGeneratorOutput(forBake, forRender, forDenoise);
     }
 
-    public Pair<float[], float[]> process() {
+    public LightmapUVGeneratorOutput process() {
         mapVertices();
         mapQuads();
         calculateQuadAreas();

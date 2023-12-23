@@ -29,6 +29,7 @@ package cientistavuador.bakedlighting.resources.mesh;
 import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.util.BVH;
+import cientistavuador.bakedlighting.util.LightmapUVGenerator;
 import cientistavuador.bakedlighting.util.MeshUtils;
 import cientistavuador.bakedlighting.util.ObjectCleaner;
 import cientistavuador.bakedlighting.util.Pair;
@@ -78,10 +79,11 @@ public class MeshData {
 
         private final MeshData parent;
         private final int lightmapSize;
-        private final CompletableFuture<Pair<float[], float[]>> futureLightmap;
+        private final CompletableFuture<LightmapUVGenerator.LightmapUVGeneratorOutput> futureLightmap;
 
         private float[] lightmapUVsBake;
         private float[] lightmapUVsRender;
+        private int[] denoiserQuads;
 
         private int vbo = 0;
         private int vao = 0;
@@ -112,11 +114,13 @@ public class MeshData {
                 return;
             }
             try {
-                Pair<float[], float[]> pair = futureLightmap.get();
-                float[] forBake = pair.getA();
-                float[] forRender = pair.getB();
+                LightmapUVGenerator.LightmapUVGeneratorOutput output = futureLightmap.get();
+                float[] forBake = output.forBaking();
+                float[] forRender = output.forRendering();
+                int[] forDenoising = output.forDenoising();
                 this.lightmapUVsBake = forBake;
                 this.lightmapUVsRender = forRender;
+                this.denoiserQuads = forDenoising;
             } catch (InterruptedException | ExecutionException ex) {
                 throw new RuntimeException(ex);
             }
@@ -130,6 +134,11 @@ public class MeshData {
         public float[] getLightmapUVsRender() {
             ensureProcessingIsDone();
             return lightmapUVsRender;
+        }
+
+        public int[] getDenoiserQuads() {
+            ensureProcessingIsDone();
+            return denoiserQuads;
         }
 
         public int getVAO() {
