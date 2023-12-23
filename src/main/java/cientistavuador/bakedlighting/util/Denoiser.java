@@ -196,15 +196,15 @@ public class Denoiser {
                 }
             }
         }
-        if (weightSum == 0f) {
-            outAverage.r = toFindSimilar.r;
-            outAverage.g = toFindSimilar.g;
-            outAverage.b = toFindSimilar.b;
-        } else {
-            float inverseWeight = 1f / weightSum;
+        float inverseWeight = 1f / weightSum;
+        if (Float.isFinite(inverseWeight)) {
             outAverage.r = r * inverseWeight;
             outAverage.g = g * inverseWeight;
             outAverage.b = b * inverseWeight;
+        } else {
+            outAverage.r = toFindSimilar.r;
+            outAverage.g = toFindSimilar.g;
+            outAverage.b = toFindSimilar.b;
         }
     }
 
