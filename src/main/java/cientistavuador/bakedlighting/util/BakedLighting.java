@@ -65,7 +65,7 @@ public class BakedLighting {
         private final Vector3f sunDirection = new Vector3f(0.5f, -1f, -1f).normalize();
         private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
         private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
-        private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.6f);
+        private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.45f);
 
         public Scene() {
 
@@ -275,8 +275,8 @@ public class BakedLighting {
 
     public static final int INDIRECT_BOUNCES = 4;
     public static final int INDIRECT_RAYS_PER_SAMPLE = 4;
-    public static final int DIRECT_SHADOW_RAYS_PER_SAMPLE = 8;
-    public static final float DIRECT_SUN_SIZE = 0.03f;
+    public static final int DIRECT_SHADOW_RAYS_PER_SAMPLE = 12;
+    public static final float DIRECT_SUN_SIZE = 0.04f;
 
     private static final float[] SAMPLE_POSITIONS = {
         (1f + 0.5f) / 4f, (0f + 0.5f) / 4f,
@@ -956,8 +956,11 @@ public class BakedLighting {
         processShadow(pixelX, pixelY, sample, triangle, position, normal, tangent, outReversedShadow);
         processDirect(pixelX, pixelY, sample, triangle, position, normal, tangent, outColor);
         if (outColor.x() < 1f && outColor.y() < 1f && outColor.z() < 1f) {
-            processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, outIndirectColor);
+            //processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, outIndirectColor);
         }
+        
+        //outColor.set(1f);
+        outIndirectColor.set(this.scene.getSunAmbientColor());
     }
 
     private void processIndirect(
@@ -1105,16 +1108,8 @@ public class BakedLighting {
                     .add(this.scene.getSunDirectionInverted())
                     .normalize();
 
-            RayResult[] results = Geometry.testRay(position, randomDirection, this.scene.getGeometries());
-            for (RayResult r : results) {
-                if (r.getDistance() < 0.001f) {
-                    continue;
-                }
-                if (r.getGeometry() == this.geometry && r.i0() == triangle.x() && r.i1() == triangle.y() && r.i2() == triangle.z()) {
-                    continue;
-                }
+            if (Geometry.fastTestRay(0.0001f, position, randomDirection, this.scene.getGeometries())) {
                 shadow++;
-                break;
             }
             this.status.rays++;
         }

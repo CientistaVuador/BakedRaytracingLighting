@@ -47,7 +47,7 @@ public class BVH implements Aab {
         if (vertices.length == 0) {
             return new BVH(vertices, vertexSize, xyzOffset, new Vector3f(), new Vector3f());
         }
-        
+
         final float aabOffset = 0.0001f;
 
         BVH[] currentArray = new BVH[indices.length / 3];
@@ -62,22 +62,22 @@ public class BVH implements Aab {
             float maxX = Math.max(vertices[v0 + 0], Math.max(vertices[v1 + 0], vertices[v2 + 0]));
             float maxY = Math.max(vertices[v0 + 1], Math.max(vertices[v1 + 1], vertices[v2 + 1]));
             float maxZ = Math.max(vertices[v0 + 2], Math.max(vertices[v1 + 2], vertices[v2 + 2]));
-            
+
             if (Math.abs(maxX - minX) < aabOffset) {
                 minX -= aabOffset;
                 maxX += aabOffset;
             }
-            
+
             if (Math.abs(maxY - minY) < aabOffset) {
                 minY -= aabOffset;
                 maxY += aabOffset;
             }
-            
+
             if (Math.abs(maxZ - minZ) < aabOffset) {
                 minZ -= aabOffset;
                 maxZ += aabOffset;
             }
-            
+
             BVH e = new BVH(vertices, vertexSize, xyzOffset,
                     minX, minY, minZ,
                     maxX, maxY, maxZ
@@ -226,7 +226,7 @@ public class BVH implements Aab {
         max.set(this.max);
     }
 
-    private class Triangle {
+    private static class Triangle {
 
         private int i0;
         private int i1;
@@ -262,6 +262,64 @@ public class BVH implements Aab {
             return hash;
         }
 
+    }
+
+    private boolean fastTestRay(Triangle check, Vector3f a, Vector3f b, Vector3f c, Set<Triangle> tested, BVH e, float tolerance, Vector3fc localOrigin, Vector3fc localDirection) {
+        if (Intersectionf.testRayAab(localOrigin, localDirection, e.getMin(), e.getMax())) {
+            if (e.getLeft() == null && e.getRight() == null) {
+                int[] nodeIndices = e.getIndices();
+                for (int i = 0; i < nodeIndices.length; i += 3) {
+                    int i0 = nodeIndices[i + 0];
+                    int i1 = nodeIndices[i + 1];
+                    int i2 = nodeIndices[i + 2];
+
+                    check.i0 = i0;
+                    check.i1 = i1;
+                    check.i2 = i2;
+
+                    if (!tested.contains(check)) {
+                        Triangle f = new Triangle();
+                        f.i0 = i0;
+                        f.i1 = i1;
+                        f.i2 = i2;
+                        tested.add(f);
+
+                        a.set(this.vertices[(i0 * vertexSize) + xyzOffset + 0], this.vertices[(i0 * vertexSize) + xyzOffset + 1], this.vertices[(i0 * vertexSize) + xyzOffset + 2]);
+                        b.set(this.vertices[(i1 * vertexSize) + xyzOffset + 0], this.vertices[(i1 * vertexSize) + xyzOffset + 1], this.vertices[(i1 * vertexSize) + xyzOffset + 2]);
+                        c.set(this.vertices[(i2 * vertexSize) + xyzOffset + 0], this.vertices[(i2 * vertexSize) + xyzOffset + 1], this.vertices[(i2 * vertexSize) + xyzOffset + 2]);
+
+                        float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
+                        if (hit >= tolerance) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            if (e.getLeft() != null) {
+                if (fastTestRay(check, a, b, c, tested, e.getLeft(), tolerance, localOrigin, localDirection)) {
+                    return true;
+                }
+            }
+            if (e.getRight() != null) {
+                if (fastTestRay(check, a, b, c, tested, e.getRight(), tolerance, localOrigin, localDirection)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean fastTestRay(float tolerance, Vector3fc localOrigin, Vector3fc localDirection) {
+        Triangle check = new Triangle();
+
+        Vector3f a = new Vector3f();
+        Vector3f b = new Vector3f();
+        Vector3f c = new Vector3f();
+        
+        Set<Triangle> tested = new HashSet<>();
+        
+        return fastTestRay(check, a, b, c, tested, this, tolerance, localOrigin, localDirection);
     }
 
     public List<LocalRayResult> testRay(Vector3fc localOrigin, Vector3fc localDirection) {

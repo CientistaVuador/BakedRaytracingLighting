@@ -46,6 +46,25 @@ import org.joml.Vector3fc;
  */
 public class Geometry {
     
+    public static boolean fastTestRay(float tolerance, Vector3fc origin, Vector3fc direction, List<Geometry> geometries) {
+        if (geometries.isEmpty()) {
+            return false;
+        }
+        
+        Vector3f transformedOrigin = new Vector3f();
+        Vector3f transformedDirection = new Vector3f();
+        
+        for (Geometry g:geometries) {
+            g.getInverseModel().transformProject(transformedOrigin.set(origin));
+            g.getInverseNormalModel().transform(transformedDirection.set(direction));
+            
+            if (g.getMesh().getBVH().fastTestRay(tolerance, transformedOrigin, transformedDirection)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
     public static RayResult[] testRay(Vector3fc origin, Vector3fc direction, List<Geometry> geometries) {
         if (geometries.isEmpty()) {
             return new RayResult[0];

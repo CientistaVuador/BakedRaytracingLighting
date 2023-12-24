@@ -208,7 +208,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 512);
+                this.status = BakedLighting.bake(this.scene, 1024);
             }
         }
     }

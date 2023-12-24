@@ -823,7 +823,7 @@ public class LightmapUVGenerator {
 
             forRender[v2 + 0] = (minX + offset) * invLightmapSize;
             forRender[v2 + 1] = (maxY - offset) * invLightmapSize;
-
+            
             if (q.secondTriangle) {
                 forBake[sv0 + 0] = maxX;
                 forBake[sv0 + 1] = minY;
