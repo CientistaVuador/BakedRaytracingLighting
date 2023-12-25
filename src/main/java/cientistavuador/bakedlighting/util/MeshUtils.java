@@ -29,15 +29,14 @@ package cientistavuador.bakedlighting.util;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import org.joml.Vector3f;
 
 /**
  *
  * @author Cien
  */
 public class MeshUtils {
-
-    public static final float PRECISION_FIX = 1f / 500f;
-
+    
     public static void generateTangent(float[] vertices, int vertexSize, int xyzOffset, int uvOffset, int outTangentXYZOffset) {
         if (vertices.length % vertexSize != 0) {
             throw new IllegalArgumentException("Wrong size.");
@@ -212,6 +211,34 @@ public class MeshUtils {
     
     public static LightmapUVGenerator.LightmapUVGeneratorOutput generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
         return LightmapUVGenerator.generateLightmapUV(vertices, vertexSize, xyzOffset, lightmapSize);
+    }
+    
+    public static void calculateTriangleNormal(float[] vertices, int vertexSize, int xyzOffset, int i0, int i1, int i2, Vector3f outNormal) {
+        float ax = vertices[(i0 * vertexSize) + xyzOffset + 0];
+        float ay = vertices[(i0 * vertexSize) + xyzOffset + 1];
+        float az = vertices[(i0 * vertexSize) + xyzOffset + 2];
+
+        float bx = vertices[(i1 * vertexSize) + xyzOffset + 0];
+        float by = vertices[(i1 * vertexSize) + xyzOffset + 1];
+        float bz = vertices[(i1 * vertexSize) + xyzOffset + 2];
+
+        float cx = vertices[(i2 * vertexSize) + xyzOffset + 0];
+        float cy = vertices[(i2 * vertexSize) + xyzOffset + 1];
+        float cz = vertices[(i2 * vertexSize) + xyzOffset + 2];
+        
+        outNormal.set(bx, by, bz).sub(ax, ay, az).normalize();
+        
+        float baX = outNormal.x();
+        float baY = outNormal.y();
+        float baZ = outNormal.z();
+        
+        outNormal.set(cx, cy, cz).sub(ax, ay, az).normalize();
+        
+        float caX = outNormal.x();
+        float caY = outNormal.y();
+        float caZ = outNormal.z();
+        
+        outNormal.set(baX, baY, baZ).cross(caX, caY, caZ).normalize();
     }
     
     private MeshUtils() {

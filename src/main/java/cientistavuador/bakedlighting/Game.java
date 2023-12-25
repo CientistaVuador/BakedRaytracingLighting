@@ -28,7 +28,6 @@ package cientistavuador.bakedlighting;
 
 import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
-import cientistavuador.bakedlighting.debug.DebugCounter;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
 import cientistavuador.bakedlighting.geometry.Geometry;
@@ -42,9 +41,9 @@ import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.RayResult;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -63,9 +62,9 @@ public class Game {
     }
 
     private final FreeCamera camera = new FreeCamera();
-    private RayResult ray = null;
+    private final List<RayResult> rays = new ArrayList<>();
     private final BakedLighting.Scene scene = new BakedLighting.Scene();
-    
+
     private BakedLighting.Status status = BakedLighting.dummyStatus();
 
     private Game() {
@@ -96,8 +95,7 @@ public class Game {
 
         Matrix4f matrix = new Matrix4f()
                 .translate(-7f, 1f, -2f)
-                .scale(1f, 1.2f, 1f)
-                ;
+                .scale(1f, 1.2f, 1f);
 
         ciencola.setModel(matrix);
 
@@ -113,10 +111,10 @@ public class Game {
     }
 
     public void loop() {
-        if (ray != null) {
-            LineRender.queueRender(ray.getOrigin(), ray.getHitpoint());
+        for (RayResult r : this.rays) {
+            LineRender.queueRender(r.getOrigin(), r.getHitPosition());
         }
-        
+
         if (this.status.hasError()) {
             try {
                 this.status.throwException();
@@ -124,7 +122,7 @@ public class Game {
                 throw new RuntimeException(ex);
             }
         }
-        
+
         camera.updateMovement();
         camera.updateUBO();
 
@@ -187,18 +185,41 @@ public class Game {
 
     public void keyCallback(long window, int key, int scancode, int action, int mods) {
         if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
+            this.rays.clear();
+
             Vector3f origin = new Vector3f().set(camera.getPosition());
             Vector3f direction = new Vector3f().set(camera.getFront());
 
-            DebugCounter c = new DebugCounter();
-            c.markStart("ray");
-            RayResult[] result = Geometry.testRay(origin, this.scene.getSunDirectionInverted(), this.scene.getGeometries());
-            if (result.length != 0) {
-                this.ray = result[0];
+            int bounces = 8;
+            float offset = 0.0001f;
+            for (int i = 0; i < bounces; i++) {
+                RayResult[] results = Geometry.testRay(origin, direction, this.scene.getGeometries());
+                if (results.length == 0) {
+                    break;
+                }
+                RayResult result = results[0];
+                this.rays.add(result);
+
+                Vector3f hitWeights = new Vector3f();
+                Vector3f hitNormal = new Vector3f();
+
+                result.weights(hitWeights);
+
+                float normalX = result.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 0);
+                float normalY = result.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 1);
+                float normalZ = result.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 2);
+
+                hitNormal.set(normalX, normalY, normalZ).normalize();
+                result.getGeometry().getNormalModel().transform(hitNormal);
+
+                origin.set(result.getTriangleNormal());
+                if (!result.frontFace()) {
+                    origin.negate();
+                }
+                origin.mul(offset).add(result.getHitPosition());
+
+                direction.reflect(hitNormal);
             }
-            System.out.println(this.ray);
-            c.markEnd("ray");
-            c.print();
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
             if (this.status.isDone()) {

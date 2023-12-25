@@ -40,27 +40,29 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
     private final Geometry geometry;
     private final Vector3f origin = new Vector3f();
     private final Vector3f direction = new Vector3f();
-    private final Vector3f hitpoint = new Vector3f();
+    private final Vector3f hitPosition = new Vector3f();
+    private final Vector3f triangleNormal = new Vector3f();
     private final float distance;
     
     public RayResult(LocalRayResult local, Geometry geometry) {
         super(
                 local.getLocalOrigin(),
                 local.getLocalDirection(),
-                local.getLocalHitpoint(),
-                local.i0(),
-                local.i1(),
-                local.i2(),
+                local.getLocalHitPosition(),
+                local.getLocalTriangleNormal(),
+                local.triangle(),
                 local.frontFace()
         );
         this.geometry = geometry;
         this.origin.set(local.getLocalOrigin());
         this.direction.set(local.getLocalDirection());
-        this.hitpoint.set(local.getLocalHitpoint());
+        this.hitPosition.set(local.getLocalHitPosition());
+        this.triangleNormal.set(local.getLocalTriangleNormal());
         geometry.getModel().transformProject(this.origin);
-        geometry.getNormalModel().transform(this.direction);
-        geometry.getModel().transformProject(this.hitpoint);
-        this.distance = this.origin.distance(this.hitpoint);
+        geometry.getNormalModel().transform(this.direction).normalize();
+        geometry.getModel().transformProject(this.hitPosition);
+        geometry.getNormalModel().transform(this.triangleNormal).normalize();
+        this.distance = this.origin.distance(this.hitPosition);
     }
 
     public Geometry getGeometry() {
@@ -75,8 +77,12 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
         return direction;
     }
 
-    public Vector3fc getHitpoint() {
-        return hitpoint;
+    public Vector3fc getHitPosition() {
+        return hitPosition;
+    }
+
+    public Vector3fc getTriangleNormal() {
+        return triangleNormal;
     }
 
     public float getDistance() {
@@ -84,9 +90,11 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
     }
     
     public float lerp(Vector3fc weights, int componentOffset) {
-        int v0 = i0() * MeshData.SIZE;
-        int v1 = i1() * MeshData.SIZE;
-        int v2 = i2() * MeshData.SIZE;
+        int[] indices = this.geometry.getMesh().getIndices();
+        
+        int v0 = indices[(this.triangle() * 3) + 0] * MeshData.SIZE;
+        int v1 = indices[(this.triangle() * 3) + 1] * MeshData.SIZE;
+        int v2 = indices[(this.triangle() * 3) + 2] * MeshData.SIZE;
         
         float[] vertices = this.geometry.getMesh().getVertices();
         
@@ -98,11 +106,12 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
     }
     
     public void weights(Vector3f weights) {
+        int[] indices = this.geometry.getMesh().getIndices();
         float[] vertices = this.geometry.getMesh().getVertices();
         
-        int v0 = (i0() * MeshData.SIZE) + MeshData.XYZ_OFFSET;
-        int v1 = (i1() * MeshData.SIZE) + MeshData.XYZ_OFFSET;
-        int v2 = (i2() * MeshData.SIZE) + MeshData.XYZ_OFFSET;
+        int v0 = (indices[(this.triangle() * 3) + 0] * MeshData.SIZE) + MeshData.XYZ_OFFSET;
+        int v1 = (indices[(this.triangle() * 3) + 1] * MeshData.SIZE) + MeshData.XYZ_OFFSET;
+        int v2 = (indices[(this.triangle() * 3) + 2] * MeshData.SIZE) + MeshData.XYZ_OFFSET;
         
         float v0x = vertices[v0 + 0];
         float v0y = vertices[v0 + 1];
@@ -116,7 +125,7 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
         float v2y = vertices[v2 + 1];
         float v2z = vertices[v2 + 2];
         
-        Vector3fc localHitpoint = getLocalHitpoint();
+        Vector3fc localHitpoint = getLocalHitPosition();
         
         RasterUtils.barycentricWeights(
                 localHitpoint.x(), localHitpoint.y(), localHitpoint.z(),
@@ -153,11 +162,11 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
                 ","+
                 this.getDirection().z()+
                 ";hit:"+
-                this.getHitpoint().x()+
+                this.getHitPosition().x()+
                 ","+
-                this.getHitpoint().y()+
+                this.getHitPosition().y()+
                 ","+
-                this.getHitpoint().z()+
+                this.getHitPosition().z()+
                 ";dist:"+
                 this.getDistance()+
                 ";front:"+

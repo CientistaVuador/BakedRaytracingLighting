@@ -36,6 +36,7 @@ import cientistavuador.bakedlighting.util.Pair;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.lwjgl.opengl.GL;
@@ -145,17 +146,17 @@ public class MeshData {
             if (this.vao == 0) {
                 ensureProcessingIsDone();
                 this.parent.getVAO();
-                
+
                 this.vao = glGenVertexArrays();
                 glBindVertexArray(this.vao);
-                
+
                 //mesh
                 glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this.parent.ebo);
-                
+
                 glBindBuffer(GL_ARRAY_BUFFER, this.parent.vbo);
                 configureBoundVAO();
                 glBindBuffer(GL_ARRAY_BUFFER, 0);
-                
+
                 //lightmap uv
                 this.vbo = glGenBuffers();
                 glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
@@ -163,9 +164,9 @@ public class MeshData {
                 glEnableVertexAttribArray(4);
                 glVertexAttribPointer(4, 2, GL_FLOAT, false, 2 * Float.BYTES, 0);
                 glBindBuffer(GL_ARRAY_BUFFER, 0);
-                
+
                 glBindVertexArray(0);
-                
+
                 if (Main.DEBUG_ENABLED && GL.getCapabilities().GL_KHR_debug) {
                     KHRDebug.glObjectLabel(GL_VERTEX_ARRAY, this.vao, "Lightmap_" + this.lightmapSize + "_Mesh_" + parent.getName());
                 }
@@ -215,7 +216,7 @@ public class MeshData {
         this.vertices = vertices;
         this.indices = indices;
         this.futureBvh = CompletableFuture.supplyAsync(() -> {
-            return BVH.create(this.vertices, MeshData.SIZE, MeshData.XYZ_OFFSET, this.indices);
+            return BVH.create(this.vertices, this.indices, MeshData.SIZE, MeshData.XYZ_OFFSET);
         });
     }
 
@@ -381,31 +382,5 @@ public class MeshData {
         }
         return mesh;
     }
-
-    @Override
-    public int hashCode() {
-        int hash = 7;
-        hash = 97 * hash + Arrays.hashCode(this.vertices);
-        hash = 97 * hash + Arrays.hashCode(this.indices);
-        return hash;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        final MeshData other = (MeshData) obj;
-        if (!Arrays.equals(this.vertices, other.vertices)) {
-            return false;
-        }
-        return Arrays.equals(this.indices, other.indices);
-    }
-
+    
 }

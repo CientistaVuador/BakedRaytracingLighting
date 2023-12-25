@@ -37,19 +37,17 @@ public class LocalRayResult {
     
     private final Vector3f localOrigin = new Vector3f();
     private final Vector3f localDirection = new Vector3f();
-    private final Vector3f localHitpoint = new Vector3f();
-    private final int i0;
-    private final int i1;
-    private final int i2;
+    private final Vector3f localHitPosition = new Vector3f();
+    private final Vector3f localTriangleNormal = new Vector3f();
+    private final int triangle;
     private final boolean frontFace;
 
-    public LocalRayResult(Vector3fc localOrigin, Vector3fc localDirection, Vector3fc localHitpoint, int index0, int index1, int index2, boolean frontFace) {
+    public LocalRayResult(Vector3fc localOrigin, Vector3fc localDirection, Vector3fc localHitPosition, Vector3fc localNormal, int triangle, boolean frontFace) {
         this.localOrigin.set(localOrigin);
         this.localDirection.set(localDirection);
-        this.localHitpoint.set(localHitpoint);
-        this.i0 = index0;
-        this.i1 = index1;
-        this.i2 = index2;
+        this.localHitPosition.set(localHitPosition);
+        this.localTriangleNormal.set(localNormal);
+        this.triangle = triangle;
         this.frontFace = frontFace;
     }
 
@@ -61,20 +59,16 @@ public class LocalRayResult {
         return localDirection;
     }
 
-    public Vector3fc getLocalHitpoint() {
-        return localHitpoint;
+    public Vector3fc getLocalHitPosition() {
+        return localHitPosition;
+    }
+
+    public Vector3f getLocalTriangleNormal() {
+        return localTriangleNormal;
     }
     
-    public int i0() {
-        return i0;
-    }
-
-    public int i1() {
-        return i1;
-    }
-
-    public int i2() {
-        return i2;
+    public int triangle() {
+        return this.triangle;
     }
     
     public boolean frontFace() {

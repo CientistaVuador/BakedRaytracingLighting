@@ -46,7 +46,7 @@ public class Geometries {
         MeshData grass = meshes.get("garage.obj.gz@grass");
         MeshData red = meshes.get("garage.obj.gz@red");
         MeshData monkey = meshes.get("garage.obj.gz@monkey");
-        bricks.setTextureHint(Textures.BRICKS);
+        bricks.setTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
         concrete.setTextureHint(Textures.CONCRETE);
         grass.setTextureHint(Textures.GRASS);
         red.setTextureHint(Textures.RED);
