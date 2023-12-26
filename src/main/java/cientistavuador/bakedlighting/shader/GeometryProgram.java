@@ -26,7 +26,6 @@
  */
 package cientistavuador.bakedlighting.shader;
 
-import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.BetterUniformSetter;
 import cientistavuador.bakedlighting.util.ProgramCompiler;
 import java.util.ArrayList;
@@ -47,37 +46,37 @@ import static org.lwjgl.opengl.GL33C.*;
  * @author Cien
  */
 public class GeometryProgram {
-    
+
     public static final int MAX_AMOUNT_OF_LIGHTS = 8;
-    
+
     public static class PointLight {
-        
+
         private boolean enabled = true;
-        
+
         private final Vector3f position = new Vector3f();
         private final Vector3f ambient = new Vector3f(0.2f, 0.2f, 0.2f);
         private final Vector3f diffuse = new Vector3f(0.8f, 0.8f, 0.8f);
-        
+
         public PointLight() {
-            
+
         }
 
         public boolean isEnabled() {
             return enabled;
         }
-        
+
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
         }
-        
+
         public Vector3fc getPosition() {
             return position;
         }
-        
+
         public void setPosition(float x, float y, float z) {
             this.position.set(x, y, z);
         }
-        
+
         public void setPosition(Vector3fc position) {
             setPosition(position.x(), position.y(), position.z());
         }
@@ -85,55 +84,55 @@ public class GeometryProgram {
         public Vector3fc getAmbient() {
             return ambient;
         }
-        
+
         public void setAmbient(float r, float g, float b) {
             this.ambient.set(r, g, b);
         }
-        
+
         public void setAmbient(Vector3fc ambient) {
             setAmbient(ambient.x(), ambient.y(), ambient.z());
         }
-        
+
         public Vector3fc getDiffuse() {
             return diffuse;
         }
-        
+
         public void setDiffuse(float r, float g, float b) {
             this.diffuse.set(r, g, b);
         }
-        
+
         public void setDiffuse(Vector3fc diffuse) {
             setDiffuse(diffuse.x(), diffuse.y(), diffuse.z());
         }
-        
+
     }
-    
+
     private static class PointLightUniforms extends PointLight {
-        
+
         private final int index;
-        
+
         private final int enabledLocation;
         private final int positionLocation;
         private final int ambientLocation;
         private final int diffuseLocation;
-        
+
         private boolean enabledRequiresUpdate = false;
         private boolean positionRequiresUpdate = false;
         private boolean ambientRequiresUpdate = false;
         private boolean diffuseRequiresUpdate = false;
-        
+
         public PointLightUniforms(int index) {
             this.index = index;
-            this.enabledLocation = glGetUniformLocation(SHADER_PROGRAM, "lights["+index+"].enabled");
-            this.positionLocation = glGetUniformLocation(SHADER_PROGRAM, "lights["+index+"].position");
-            this.ambientLocation = glGetUniformLocation(SHADER_PROGRAM, "lights["+index+"].ambient");
-            this.diffuseLocation = glGetUniformLocation(SHADER_PROGRAM, "lights["+index+"].diffuse");
+            this.enabledLocation = glGetUniformLocation(SHADER_PROGRAM, "lights[" + index + "].enabled");
+            this.positionLocation = glGetUniformLocation(SHADER_PROGRAM, "lights[" + index + "].position");
+            this.ambientLocation = glGetUniformLocation(SHADER_PROGRAM, "lights[" + index + "].ambient");
+            this.diffuseLocation = glGetUniformLocation(SHADER_PROGRAM, "lights[" + index + "].diffuse");
         }
 
         public int getIndex() {
             return index;
         }
-        
+
         @Override
         public void setEnabled(boolean enabled) {
             if (isEnabled() != enabled) {
@@ -149,7 +148,7 @@ public class GeometryProgram {
             }
             super.setPosition(x, y, z);
         }
-        
+
         @Override
         public void setAmbient(float r, float g, float b) {
             if (!getAmbient().equals(r, g, b)) {
@@ -157,7 +156,7 @@ public class GeometryProgram {
             }
             super.setAmbient(r, g, b);
         }
-        
+
         @Override
         public void setDiffuse(float r, float g, float b) {
             if (!getDiffuse().equals(r, g, b)) {
@@ -165,7 +164,7 @@ public class GeometryProgram {
             }
             super.setDiffuse(r, g, b);
         }
-        
+
         public void updateUniforms() {
             if (this.enabledRequiresUpdate) {
                 glUniform1i(this.enabledLocation, (isEnabled() ? 1 : 0));
@@ -188,7 +187,7 @@ public class GeometryProgram {
             }
         }
     }
-    
+
     public static final int SHADER_PROGRAM = ProgramCompiler.compile(
             """
             #version 330 core
@@ -222,9 +221,8 @@ public class GeometryProgram {
                 
                 gl_Position = projectionView * pos;
             }
-            """
-            ,
-            """
+            """,
+             """
             #version 330 core
             
             struct PointLight {
@@ -288,30 +286,32 @@ public class GeometryProgram {
                 }
             }
             """,
-            new HashMap<>() {{
-                put("MAX_AMOUNT_OF_LIGHTS", Integer.toString(MAX_AMOUNT_OF_LIGHTS));
-            }}
+            new HashMap<>() {
+        {
+            put("MAX_AMOUNT_OF_LIGHTS", Integer.toString(MAX_AMOUNT_OF_LIGHTS));
+        }
+    }
     );
-    
+
     private static final BetterUniformSetter UNIFORMS = new BetterUniformSetter(SHADER_PROGRAM);
     public static final GeometryProgram INSTANCE = new GeometryProgram();
-    
+
     private final Matrix4f projectionView = new Matrix4f();
     private final Matrix4f model = new Matrix4f();
     private final Matrix3f normalModel = new Matrix3f();
     private final Vector4f color = new Vector4f();
     private int textureUnit = 0;
     private int lightmapTextureUnit = 0;
-    
+
     private boolean lightingEnabled = false;
-    
+
     private final Vector3f sunDirection = new Vector3f();
     private final Vector3f sunAmbient = new Vector3f();
     private final Vector3f sunDiffuse = new Vector3f();
-    
+
     private final PointLightUniforms[] lightsUniforms = new PointLightUniforms[MAX_AMOUNT_OF_LIGHTS];
     private final List<PointLight> lights = new ArrayList<>();
-    
+
     private GeometryProgram() {
         for (int i = 0; i < this.lightsUniforms.length; i++) {
             this.lightsUniforms[i] = new PointLightUniforms(i);
@@ -321,7 +321,7 @@ public class GeometryProgram {
     public void use() {
         glUseProgram(SHADER_PROGRAM);
     }
-    
+
     public Matrix4fc getProjectionView() {
         return projectionView;
     }
@@ -329,7 +329,7 @@ public class GeometryProgram {
     public Matrix4fc getModel() {
         return model;
     }
-    
+
     public Matrix3fc getNormalModel() {
         return normalModel;
     }
@@ -361,7 +361,7 @@ public class GeometryProgram {
     public int getLightmapTextureUnit() {
         return lightmapTextureUnit;
     }
-    
+
     public void updateLightsUniforms() {
         int uniformsIndex = 0;
         int lightsIndex = 0;
@@ -372,23 +372,23 @@ public class GeometryProgram {
                 uniformsIndex++;
                 continue;
             }
-            
+
             PointLight light = this.lights.get(lightsIndex);
             if (light == null || !light.isEnabled()) {
                 lightsIndex++;
                 continue;
             }
-            
+
             uniforms.setEnabled(true);
             uniforms.setPosition(light.getPosition());
             uniforms.setDiffuse(light.getDiffuse());
             uniforms.setAmbient(light.getAmbient());
-            
+
             uniformsIndex++;
             lightsIndex++;
         }
-        
-        for (PointLightUniforms p:this.lightsUniforms) {
+
+        for (PointLightUniforms p : this.lightsUniforms) {
             p.updateUniforms();
         }
     }
@@ -396,30 +396,30 @@ public class GeometryProgram {
     public boolean isLightingEnabled() {
         return lightingEnabled;
     }
-    
+
     public void setSunDirection(float x, float y, float z) {
         this.sunDirection.set(x, y, z).normalize();
         glUniform3f(UNIFORMS.locationOf("sunDirection"), this.sunDirection.x(), this.sunDirection.y(), this.sunDirection.z());
     }
-    
+
     public void setSunDirection(Vector3fc dir) {
         setSunDirection(dir.x(), dir.y(), dir.z());
     }
-    
+
     public void setSunAmbient(float r, float g, float b) {
         this.sunAmbient.set(r, g, b);
         glUniform3f(UNIFORMS.locationOf("sunAmbient"), r, g, b);
     }
-    
+
     public void setSunAmbient(Vector3fc ambient) {
         setSunAmbient(ambient.x(), ambient.y(), ambient.z());
     }
-    
+
     public void setSunDiffuse(float r, float g, float b) {
         this.sunDiffuse.set(r, g, b);
         glUniform3f(UNIFORMS.locationOf("sunDiffuse"), r, g, b);
     }
-    
+
     public void setSunDiffuse(Vector3fc diffuse) {
         setSunDiffuse(diffuse.x(), diffuse.y(), diffuse.z());
     }
@@ -428,20 +428,20 @@ public class GeometryProgram {
         this.lightingEnabled = lightingEnabled;
         glUniform1i(UNIFORMS.locationOf("lightingEnabled"), (lightingEnabled ? 1 : 0));
     }
-    
+
     public void setProjectionView(Matrix4fc projectionView) {
         this.projectionView.set(projectionView);
         BetterUniformSetter.uniformMatrix4fv(UNIFORMS.locationOf("projectionView"), projectionView);
     }
-    
+
     public void setModel(Matrix4fc model) {
         this.normalModel.set(this.model.set(model).invert().transpose());
         this.model.set(model);
-        
+
         BetterUniformSetter.uniformMatrix4fv(UNIFORMS.locationOf("model"), this.model);
         BetterUniformSetter.uniformMatrix3fv(UNIFORMS.locationOf("normalModel"), this.normalModel);
     }
-    
+
     public void setTextureUnit(int unit) {
         this.textureUnit = unit;
         glUniform1i(UNIFORMS.locationOf("tex"), unit);
@@ -451,14 +451,14 @@ public class GeometryProgram {
         this.lightmapTextureUnit = lightmapTextureUnit;
         glUniform1i(UNIFORMS.locationOf("lightmap"), lightmapTextureUnit);
     }
-    
+
     public void setColor(float r, float g, float b, float a) {
         this.color.set(r, g, b, a);
         glUniform4f(UNIFORMS.locationOf("color"), r, g, b, a);
     }
-    
+
     public void setColor(Vector4fc color) {
         setColor(color.x(), color.y(), color.z(), color.w());
     }
-    
+
 }

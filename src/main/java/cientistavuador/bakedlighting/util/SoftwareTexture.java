@@ -205,16 +205,17 @@ public interface SoftwareTexture {
     public default void sampleNearest(float x, float y, float[] result, int offset) {
         int width = width();
         int height = height();
-        int pX = wrapX(((int) Math.floor(Math.abs(x) * width)));
-        int pY = wrapY(((int) Math.floor(Math.abs(y) * height)));
+        int pX = wrapX((int) Math.floor(x * width));
+        int pY = wrapY((int) Math.floor(y * height));
         fetch(pX, pY, result, offset);
     }
 
     public default void sampleBilinear(float x, float y, float[] result, int offset) {
         int width = width();
         int height = height();
-        float pX = Math.abs((x * width) - 0.5f);
-        float pY = Math.abs((y * height) - 0.5f);
+        float pX = (x * width) - 0.5f;
+        float pY = (y * height) - 0.5f;
+        
         int bottomLeftX = (int) Math.floor(pX);
         int bottomLeftY = (int) Math.floor(pY);
         float weightX = pX - bottomLeftX;

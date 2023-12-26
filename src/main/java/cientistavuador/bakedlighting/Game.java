@@ -40,6 +40,7 @@ import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
+import cientistavuador.bakedlighting.util.RasterUtils;
 import cientistavuador.bakedlighting.util.RayResult;
 import java.util.ArrayList;
 import java.util.List;

@@ -29,9 +29,11 @@ package cientistavuador.bakedlighting.util;
 import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
+import java.io.File;
 import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Formatter;
 import java.util.HashMap;
 import java.util.List;
@@ -41,9 +43,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import javax.imageio.ImageIO;
 import org.joml.Matrix3f;
 import org.joml.Matrix3fc;
 import org.joml.Matrix4fc;
+import org.joml.Vector2f;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import org.joml.Vector3i;
@@ -295,11 +299,15 @@ public class BakedLighting {
         private final int vectorSize;
         private final float[] data;
 
-        public PositionBuffer(int size) {
+        public PositionBuffer(int size, int samples) {
             this.sampleSize = 3;
-            this.vectorSize = this.sampleSize * SAMPLES;
+            this.vectorSize = this.sampleSize * samples;
             this.lineSize = size * this.vectorSize;
             this.data = new float[size * this.lineSize];
+        }
+
+        public PositionBuffer(int size) {
+            this(size, SAMPLES);
         }
 
         public void write(Vector3f position, int x, int y, int sample) {
@@ -325,11 +333,15 @@ public class BakedLighting {
         private final int vectorSize;
         private final int[] data;
 
-        public IndicesBuffer(int size) {
+        public IndicesBuffer(int size, int samples) {
             this.sampleSize = 3;
-            this.vectorSize = this.sampleSize * SAMPLES;
+            this.vectorSize = this.sampleSize * samples;
             this.lineSize = size * this.vectorSize;
             this.data = new int[size * this.lineSize];
+        }
+
+        public IndicesBuffer(int size) {
+            this(size, SAMPLES);
         }
 
         public void write(Vector3i indices, int x, int y, int sample) {
@@ -355,11 +367,15 @@ public class BakedLighting {
         private final int vectorSize;
         private final boolean[] data;
 
-        public BooleanBuffer(int size) {
+        public BooleanBuffer(int size, int samples) {
             this.sampleSize = 1;
             this.vectorSize = this.sampleSize * SAMPLES;
             this.lineSize = size * this.vectorSize;
             this.data = new boolean[size * this.lineSize];
+        }
+
+        public BooleanBuffer(int size) {
+            this(size, SAMPLES);
         }
 
         public void write(boolean value, int x, int y, int sample) {
@@ -378,11 +394,15 @@ public class BakedLighting {
         private final int vectorSize;
         private final byte[] data;
 
-        public UnitVectorBuffer(int size) {
+        public UnitVectorBuffer(int size, int samples) {
             this.sampleSize = 3;
-            this.vectorSize = this.sampleSize * SAMPLES;
+            this.vectorSize = this.sampleSize * samples;
             this.lineSize = size * this.vectorSize;
             this.data = new byte[size * this.lineSize];
+        }
+
+        public UnitVectorBuffer(int size) {
+            this(size, SAMPLES);
         }
 
         public void write(Vector3f unit, int x, int y, int sample) {
@@ -417,11 +437,15 @@ public class BakedLighting {
         private final int vectorSize;
         private final byte[] data;
 
-        public ColorBuffer(int size) {
+        public ColorBuffer(int size, int samples) {
             this.sampleSize = 3;
-            this.vectorSize = this.sampleSize * SAMPLES;
+            this.vectorSize = this.sampleSize * samples;
             this.lineSize = size * this.vectorSize;
             this.data = new byte[size * this.lineSize];
+        }
+
+        public ColorBuffer(int size) {
+            this(size, SAMPLES);
         }
 
         public void write(Vector3f color, int x, int y, int sample) {
@@ -494,13 +518,16 @@ public class BakedLighting {
     private int[] denoiserQuads = null;
 
     private BooleanBuffer sampleBuffer = null;
+
     private IndicesBuffer indicesBuffer = null;
     private PositionBuffer positionBuffer = null;
     private UnitVectorBuffer normalBuffer = null;
     private UnitVectorBuffer tangentBuffer = null;
+
     private ColorBuffer indirectColorBuffer = null;
     private ColorBuffer directColorBuffer = null;
     private GrayBuffer reverseShadowBuffer = null;
+
     private ByteBuffer outputBuffer = null;
     private Cleaner.Cleanable outputBufferCleanable = null;
 
@@ -972,10 +999,8 @@ public class BakedLighting {
             Vector3f outIndirectColor,
             float[] outReversedShadow
     ) {
-        //processShadow(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outReversedShadow);
-        //processDirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outColor);
-        outColor.zero();
-        outReversedShadow[0] = 1f;
+        processShadow(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outReversedShadow);
+        processDirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outColor);
         if (outColor.x() < 1f && outColor.y() < 1f && outColor.z() < 1f) {
             processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outIndirectColor);
         }
@@ -1018,21 +1043,21 @@ public class BakedLighting {
                     triangle.x(), triangle.y(), triangle.z(),
                     bouncePos
             );
-            
+
             this.geometry.getNormalModel().transform(bouncePos).normalize().mul(RAY_OFFSET);
-            
+
             float offsetX = bouncePos.x();
             float offsetY = bouncePos.y();
             float offsetZ = bouncePos.z();
-            
+
             bouncePos.set(
-                            lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 0),
-                            lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 1),
-                            lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 2)
-                    );
-            
+                    lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 0),
+                    lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 1),
+                    lerp(hitWeights, triangle.x(), triangle.y(), triangle.z(), MeshData.XYZ_OFFSET + 2)
+            );
+
             this.geometry.getModel().transformProject(bouncePos).add(offsetX, offsetY, offsetZ);
-            
+
             for (int i = 0; i < INDIRECT_BOUNCES; i++) {
                 if (i != 0) {
                     randomSunDirection(randomDirection);
@@ -1042,7 +1067,7 @@ public class BakedLighting {
                         break;
                     }
                 }
-                
+
                 RayResult[] results = Geometry.testRay(bouncePos, bounceDir, this.scene.getGeometries());
                 this.status.rays++;
                 if (results.length == 0) {
@@ -1050,7 +1075,7 @@ public class BakedLighting {
                     break;
                 }
                 RayResult hitPos = results[0];
-                
+
                 hitPos.weights(hitWeights);
 
                 float normalX = hitPos.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 0);
@@ -1059,21 +1084,21 @@ public class BakedLighting {
 
                 hitNormal.set(normalX, normalY, normalZ).normalize();
                 hitPos.getGeometry().getNormalModel().transform(hitNormal);
-                
+
                 bounceDir.reflect(hitNormal);
-                
+
                 float u = hitPos.lerp(hitWeights, MeshData.UV_OFFSET + 0);
                 float v = hitPos.lerp(hitWeights, MeshData.UV_OFFSET + 1);
 
                 this.sceneTextures.get(hitPos.getGeometry().getMesh().getTextureHint()).sampleNearest(u, v, colorOutput, 0);
                 bounceColors.add(new Vector3f(colorOutput));
-                
+
                 bouncePos.set(hitPos.getTriangleNormal());
                 if (!hitPos.frontFace()) {
                     bouncePos.negate();
                 }
                 bouncePos.mul(RAY_OFFSET);
-                
+
                 bouncePos.add(hitPos.getHitPosition());
             }
             for (Vector3f bounce : bounceColors) {
@@ -1174,7 +1199,7 @@ public class BakedLighting {
             tasks.clear();
         }
 
-        //this.indirectColorBuffer = indirectOutput;
+        this.indirectColorBuffer = indirectOutput;
         this.reverseShadowBuffer = reversedShadowOutput;
     }
 
@@ -1239,7 +1264,7 @@ public class BakedLighting {
             }
         }
 
-        Denoiser.DenoiserIO indirectIO = new Denoiser.DenoiserIO() {
+        GaussianBlur.GaussianIO indirectIO = new GaussianBlur.GaussianIO() {
             private final Vector3f ioColor = new Vector3f();
 
             @Override
@@ -1261,7 +1286,7 @@ public class BakedLighting {
             }
 
             @Override
-            public void write(int x, int y, Denoiser.DenoiserColor color) {
+            public void write(int x, int y, GaussianBlur.GaussianColor color) {
                 this.ioColor.set(color.r, color.g, color.b);
                 for (int s = 0; s < SAMPLES; s++) {
                     if (sampleMap[s + (x * SAMPLES) + (y * width * SAMPLES)]) {
@@ -1271,20 +1296,17 @@ public class BakedLighting {
             }
 
             @Override
-            public void read(int x, int y, Denoiser.DenoiserColor color) {
+            public void read(int x, int y, GaussianBlur.GaussianColor color) {
                 color.r = colorMap[(x * 3) + (y * width * 3) + 0];
                 color.g = colorMap[(x * 3) + (y * width * 3) + 1];
                 color.b = colorMap[(x * 3) + (y * width * 3) + 2];
             }
         };
 
-        Denoiser.denoise(indirectIO,
-                17,
-                true,
-                23,
-                0.5f,
-                0.0f,
-                false
+        GaussianBlur.blur(
+                indirectIO,
+                51,
+                20f
         );
 
         Denoiser.DenoiserIO reversedShadowIO = new Denoiser.DenoiserIO() {
