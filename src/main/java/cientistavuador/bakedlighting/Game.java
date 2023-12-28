@@ -30,6 +30,7 @@ import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
+import cientistavuador.bakedlighting.geometry.GeometriesLoader;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
@@ -40,10 +41,14 @@ import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
-import cientistavuador.bakedlighting.util.RasterUtils;
+import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator;
+import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Face;
+import cientistavuador.bakedlighting.util.MeshUtils;
+import cientistavuador.bakedlighting.util.Pair;
 import cientistavuador.bakedlighting.util.RayResult;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -109,6 +114,25 @@ public class Game {
                 .scale(0.10f);
 
         ciencola.setModel(matrix);
+        
+        float[] ciencolaVertices = Geometries.CIENCOLA.getVertices();
+        List<Face> faces = new ExperimentalLightmapUVGenerator(ciencolaVertices, MeshData.SIZE, MeshData.XYZ_OFFSET).process();
+        
+        int globalIndex = 0;
+        
+        for (int i = 0; i < faces.size(); i++) {
+            Face face = faces.get(i);
+            System.out.println(face.triangles.length+", "+face.width+", "+face.height);
+            /*//System.out.println("o face_"+i);
+            for (int v = 0; v < face.uvs.length; v += 2) {
+            System.out.println("v "+face.uvs[v + 0]+" "+face.uvs[v + 1]+" "+(-(i * 0.25f)));
+            }
+            for (int v = 0; v < face.uvs.length; v += (2 * 3)) {
+            int e = (v / 2) + globalIndex;
+            System.out.println("f "+(e+1)+" "+(e+2)+" "+(e+3));
+            }
+            globalIndex += (face.uvs.length / 2);*/
+        }
     }
 
     public void loop() {

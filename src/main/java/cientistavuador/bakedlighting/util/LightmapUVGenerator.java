@@ -372,7 +372,7 @@ public class LightmapUVGenerator {
                     }
                 }
             }
-
+            
             Quad q = new Quad();
             this.quads.add(q);
 

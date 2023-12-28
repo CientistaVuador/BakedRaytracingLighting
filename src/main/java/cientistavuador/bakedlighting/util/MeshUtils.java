@@ -144,7 +144,7 @@ public class MeshUtils {
             int indexA = this.vertexIndex;
             int indexB = other.vertexIndex;
             for (int i = 0; i < this.vertexSize; i++) {
-                if (this.vertices[indexA + i] != this.vertices[indexB + i]) {
+                if (Float.floatToRawIntBits(this.vertices[indexA + i]) != Float.floatToRawIntBits(this.vertices[indexB + i])) {
                     return false;
                 }
             }

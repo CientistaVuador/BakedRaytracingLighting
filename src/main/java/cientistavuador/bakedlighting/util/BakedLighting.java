@@ -1001,9 +1001,7 @@ public class BakedLighting {
     ) {
         processShadow(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outReversedShadow);
         processDirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outColor);
-        if (outColor.x() < 1f && outColor.y() < 1f && outColor.z() < 1f) {
-            processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outIndirectColor);
-        }
+        processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outIndirectColor);
     }
 
     private void processIndirect(
