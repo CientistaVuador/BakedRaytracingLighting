@@ -92,6 +92,9 @@ public class MarginAutomata {
 
     private MarginAutomata(MarginAutomataIO io, int iterations) {
         this.io = io;
+        if (iterations < 0) {
+            iterations = Integer.MAX_VALUE;
+        }
         this.iterations = iterations;
     }
 
@@ -128,7 +131,8 @@ public class MarginAutomata {
         }
     }
 
-    public void iterate() {
+    public boolean iterate() {
+        boolean finished = true;
         for (int y = 0; y < this.height; y++) {
             for (int x = 0; x < this.width; x++) {
                 if (this.io.outOfBounds(x, y)) {
@@ -214,8 +218,11 @@ public class MarginAutomata {
                 this.nextColorMap[colorIndex + 1] = g;
                 this.nextColorMap[colorIndex + 2] = b;
                 this.nextEmptyMap[emptyIndex] = false;
+                
+                finished = false;
             }
         }
+        return finished;
     }
 
     public void flipMaps() {
@@ -253,7 +260,9 @@ public class MarginAutomata {
     public void process() {
         load();
         for (int i = 0; i < this.iterations; i++) {
-            iterate();
+            if (iterate()) {
+                break;
+            }
             flipMaps();
         }
         output();

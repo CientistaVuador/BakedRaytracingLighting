@@ -307,7 +307,7 @@ public class BakedLighting {
         return status;
     }
 
-    public static final float RAY_OFFSET = 0.0001f;
+    public static final float RAY_OFFSET = 0.001f;
     public static final int INDIRECT_BOUNCES = 4;
     public static final int INDIRECT_RAYS_PER_SAMPLE = 8;
     public static final int DIRECT_SHADOW_RAYS_PER_SAMPLE = 12;
