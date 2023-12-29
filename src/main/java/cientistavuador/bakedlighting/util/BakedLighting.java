@@ -67,11 +67,15 @@ public class BakedLighting {
 
         private final List<Geometry> geometries = new ArrayList<>();
 
-        private final Vector3f sunDirection = new Vector3f(0.5f, -1f, -1f).normalize();
+        private final Vector3f sunDirection = new Vector3f(0.5f, -1f, 1f).normalize();
         private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
         private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
         private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.45f);
-
+        
+        private boolean directLightingEnabled = true;
+        private boolean shadowsEnabled = true;
+        private boolean indirectLightingEnabled = true;
+        
         public Scene() {
 
         }
@@ -120,6 +124,31 @@ public class BakedLighting {
         public void setSunAmbientColor(Vector3fc color) {
             setSunAmbientColor(color.x(), color.y(), color.z());
         }
+
+        public boolean isDirectLightingEnabled() {
+            return directLightingEnabled;
+        }
+
+        public boolean isShadowsEnabled() {
+            return shadowsEnabled;
+        }
+
+        public boolean isIndirectLightingEnabled() {
+            return indirectLightingEnabled;
+        }
+
+        public void setDirectLightingEnabled(boolean directLightingEnabled) {
+            this.directLightingEnabled = directLightingEnabled;
+        }
+
+        public void setShadowsEnabled(boolean shadowsEnabled) {
+            this.shadowsEnabled = shadowsEnabled;
+        }
+
+        public void setIndirectLightingEnabled(boolean indirectLightingEnabled) {
+            this.indirectLightingEnabled = indirectLightingEnabled;
+        }
+        
     }
 
     public static class Status {
@@ -908,7 +937,7 @@ public class BakedLighting {
 
                 outColor.zero();
                 outIndirectColor.zero();
-                outReversedShadow[0] = 0f;
+                outReversedShadow[0] = 1f;
 
                 processSample(
                         x,
@@ -999,9 +1028,15 @@ public class BakedLighting {
             Vector3f outIndirectColor,
             float[] outReversedShadow
     ) {
-        processShadow(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outReversedShadow);
-        processDirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outColor);
-        processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outIndirectColor);
+        if (this.scene.isDirectLightingEnabled()) {
+            processDirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outColor);
+        }
+        if (this.scene.isShadowsEnabled()) {
+            processShadow(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outReversedShadow);
+        }
+        if (this.scene.isIndirectLightingEnabled()) {
+            processIndirect(pixelX, pixelY, sample, triangle, position, normal, tangent, TBN, outIndirectColor);
+        }
     }
 
     private void processIndirect(
@@ -1215,6 +1250,7 @@ public class BakedLighting {
         final int yOffset = minY;
         final boolean[] sampleMap = new boolean[width * height * SAMPLES];
         final boolean[] boundsMap = new boolean[width * height];
+        final boolean[] ignoreMap = new boolean[width * height];
         final float[] colorMap = new float[width * height * 3];
         final float[] reversedShadowMap = new float[width * height];
 
@@ -1257,7 +1293,12 @@ public class BakedLighting {
                     colorMap[(localX * 3) + (localY * width * 3) + 1] = g;
                     colorMap[(localX * 3) + (localY * width * 3) + 2] = b;
                     reversedShadowMap[localX + (localY * width)] = reversedShadow;
+                    
                     boundsMap[localX + (localY * width)] = true;
+                    
+                    if (reversedShadow >= (254f/255f)) {
+                        ignoreMap[localX + (localY * width)] = true;
+                    }
                 }
             }
         }
@@ -1303,11 +1344,11 @@ public class BakedLighting {
 
         GaussianBlur.blur(
                 indirectIO,
-                51,
-                20f
+                41,
+                8f
         );
 
-        Denoiser.DenoiserIO reversedShadowIO = new Denoiser.DenoiserIO() {
+        GaussianBlur.GaussianIO reversedShadowIO = new GaussianBlur.GaussianIO() {
             @Override
             public int width() {
                 return width;
@@ -1327,7 +1368,12 @@ public class BakedLighting {
             }
 
             @Override
-            public void write(int x, int y, Denoiser.DenoiserColor color) {
+            public boolean ignore(int x, int y) {
+                return ignoreMap[x + (y * width)];
+            }
+
+            @Override
+            public void write(int x, int y, GaussianBlur.GaussianColor color) {
                 float shadow = (color.r + color.g + color.b) / 3f;
                 for (int s = 0; s < SAMPLES; s++) {
                     if (sampleMap[s + (x * SAMPLES) + (y * width * SAMPLES)]) {
@@ -1337,7 +1383,7 @@ public class BakedLighting {
             }
 
             @Override
-            public void read(int x, int y, Denoiser.DenoiserColor color) {
+            public void read(int x, int y, GaussianBlur.GaussianColor color) {
                 float shadow = reversedShadowMap[x + (y * width)];
                 color.r = shadow;
                 color.g = shadow;
@@ -1345,13 +1391,10 @@ public class BakedLighting {
             }
         };
 
-        Denoiser.denoise(reversedShadowIO,
-                3,
-                true,
-                7,
-                1.2f,
-                0.0f,
-                false
+        GaussianBlur.blur(
+                reversedShadowIO,
+                21,
+                1.5f
         );
     }
 

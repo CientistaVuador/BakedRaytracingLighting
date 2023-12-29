@@ -44,8 +44,6 @@ import org.joml.Vector4i;
  */
 public class ExperimentalLightmapUVGenerator {
 
-    private static final float TOLERANCE = 1f - (1f / 256f);
-    
     private class Vertex {
         public int vertex;
 
@@ -53,7 +51,7 @@ public class ExperimentalLightmapUVGenerator {
         public int hashCode() {
             int hash = 7;
             for (int i = 0; i < 3; i++) {
-                hash = 79 * hash + Float.floatToRawIntBits(ExperimentalLightmapUVGenerator.this.vertices[this.vertex + ExperimentalLightmapUVGenerator.this.xyzOffset + i]);
+                hash = 79 * hash + Float.floatToRawIntBits(ExperimentalLightmapUVGenerator.this.vertices[this.vertex + i]);
             }
             return hash;
         }
@@ -71,8 +69,8 @@ public class ExperimentalLightmapUVGenerator {
             }
             final Vertex other = (Vertex) obj;
             for (int i = 0; i < 3; i++) {
-                float t = ExperimentalLightmapUVGenerator.this.vertices[this.vertex + ExperimentalLightmapUVGenerator.this.xyzOffset + i];
-                float o = ExperimentalLightmapUVGenerator.this.vertices[other.vertex + ExperimentalLightmapUVGenerator.this.xyzOffset + i];
+                float t = ExperimentalLightmapUVGenerator.this.vertices[this.vertex + i];
+                float o = ExperimentalLightmapUVGenerator.this.vertices[other.vertex + i];
                 if (t != o) {
                     return false;
                 }
@@ -89,23 +87,32 @@ public class ExperimentalLightmapUVGenerator {
         public float height;
     }
 
+    private static final float TOLERANCE = 1f - (1f / 256f);
+    private static final int VERTEX_SIZE = 3;
+    
+    private final float pixelToWorldRatio;
+    
     private final float[] vertices;
-    private final int vertexSize;
-    private final int xyzOffset;
 
     private final Map<Vertex, List<Vertex>> mappedVertices = new HashMap<>();
     private final Set<Integer> processedTriangles = new HashSet<>();
 
     private final List<Face> faces = new ArrayList<>();
 
-    public ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset) {
-        this.vertices = vertices;
-        this.vertexSize = vertexSize;
-        this.xyzOffset = xyzOffset;
+    public ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, float scaleX, float scaleY, float scaleZ, float pixelToWorldRatio) {
+        this.vertices = new float[(vertices.length / vertexSize) * VERTEX_SIZE];
+        for (int v = 0; v < vertices.length; v += vertexSize) {
+            int vertex = v / vertexSize;
+            int vxyz = v + xyzOffset;
+            this.vertices[(vertex * VERTEX_SIZE) + 0] = vertices[vxyz + 0] * scaleX;
+            this.vertices[(vertex * VERTEX_SIZE) + 1] = vertices[vxyz + 1] * scaleY;
+            this.vertices[(vertex * VERTEX_SIZE) + 2] = vertices[vxyz + 2] * scaleZ;
+        }
+        this.pixelToWorldRatio = pixelToWorldRatio;
     }
 
     private void mapVertices() {
-        for (int v = 0; v < this.vertices.length; v += this.vertexSize) {
+        for (int v = 0; v < this.vertices.length; v += VERTEX_SIZE) {
             Vertex e = new Vertex();
             e.vertex = v;
             List<Vertex> verts = mappedVertices.get(e);
@@ -118,8 +125,8 @@ public class ExperimentalLightmapUVGenerator {
     }
 
     public void buildFaces() {
-        for (int v = 0; v < this.vertices.length; v += (this.vertexSize * 3)) {
-            int triangle = (v / this.vertexSize) / 3;
+        for (int v = 0; v < this.vertices.length; v += (VERTEX_SIZE * 3)) {
+            int triangle = (v / VERTEX_SIZE) / 3;
             if (this.processedTriangles.contains(triangle)) {
                 continue;
             }
@@ -128,9 +135,9 @@ public class ExperimentalLightmapUVGenerator {
     }
 
     private void findNormal(int triangle, Vector3f outNormal) {
-        int v0 = (((triangle * 3) + 0) * this.vertexSize) + this.xyzOffset;
-        int v1 = (((triangle * 3) + 1) * this.vertexSize) + this.xyzOffset;
-        int v2 = (((triangle * 3) + 2) * this.vertexSize) + this.xyzOffset;
+        int v0 = ((triangle * 3) + 0) * VERTEX_SIZE;
+        int v1 = ((triangle * 3) + 1) * VERTEX_SIZE;
+        int v2 = ((triangle * 3) + 2) * VERTEX_SIZE;
 
         float v0x = this.vertices[v0 + 0];
         float v0y = this.vertices[v0 + 1];
@@ -183,7 +190,7 @@ public class ExperimentalLightmapUVGenerator {
 
         searchTriangle:
         for (Vertex vav : vaVertices) {
-            int currentTriangle = (vav.vertex / this.vertexSize) / 3;
+            int currentTriangle = (vav.vertex / VERTEX_SIZE) / 3;
             if (this.processedTriangles.contains(currentTriangle)) {
                 continue;
             }
@@ -192,7 +199,7 @@ public class ExperimentalLightmapUVGenerator {
             }
             sv0 = vav.vertex;
             for (Vertex vbv : vbVertices) {
-                int otherTriangle = (vbv.vertex / this.vertexSize) / 3;
+                int otherTriangle = (vbv.vertex / VERTEX_SIZE) / 3;
                 if (otherTriangle == currentTriangle) {
                     sv1 = vbv.vertex;
                     striangle = currentTriangle;
@@ -203,7 +210,7 @@ public class ExperimentalLightmapUVGenerator {
 
         if (striangle != -1) {
             for (int i = 0; i < 3; i++) {
-                int r = (striangle * 3 * this.vertexSize) + (this.vertexSize * i);
+                int r = (striangle * 3 * VERTEX_SIZE) + (VERTEX_SIZE * i);
                 if (r != sv0 && r != sv1) {
                     sv2 = r;
                     break;
@@ -234,9 +241,9 @@ public class ExperimentalLightmapUVGenerator {
         float normalY = outNormal.y();
         float normalZ = outNormal.z();
 
-        long v0 = (((triangle * 3) + 0) * this.vertexSize);
-        long v1 = (((triangle * 3) + 1) * this.vertexSize);
-        long v2 = (((triangle * 3) + 2) * this.vertexSize);
+        long v0 = (((triangle * 3) + 0) * VERTEX_SIZE);
+        long v1 = (((triangle * 3) + 1) * VERTEX_SIZE);
+        long v2 = (((triangle * 3) + 2) * VERTEX_SIZE);
 
         long[] edges = new long[]{
             (v0 << 32) | (v1),
@@ -248,10 +255,10 @@ public class ExperimentalLightmapUVGenerator {
             long[] nextEdges = new long[64];
             int nextEdgesIndex = 0;
 
-            for (long edge : edges) {
-                int edgeV0 = (int) (edge >> 32);
-                int edgeV1 = (int) (edge);
-
+            for (long currentEdge : edges) {
+                int edgeV0 = (int) (currentEdge >> 32);
+                int edgeV1 = (int) (currentEdge);
+                
                 while (true) {
                     findEdgeTriangle(edgeV0, edgeV1, edgeTriangle, ignoreSet);
 
@@ -278,15 +285,18 @@ public class ExperimentalLightmapUVGenerator {
                 long sv1 = edgeTriangle.y();
                 long sv2 = edgeTriangle.z();
                 
+                long edge0 = (sv0 << 32) | (sv1);
                 long edge1 = (sv1 << 32) | (sv2);
                 long edge2 = (sv2 << 32) | (sv0);
                 
-                if ((nextEdgesIndex + 2) > nextEdges.length) {
+                if ((nextEdgesIndex + 4) > nextEdges.length) {
                     nextEdges = Arrays.copyOf(nextEdges, nextEdges.length * 2);
                 }
-                nextEdges[nextEdgesIndex + 0] = edge1;
-                nextEdges[nextEdgesIndex + 1] = edge2;
-                nextEdgesIndex += 2;
+                nextEdges[nextEdgesIndex + 0] = currentEdge;
+                nextEdges[nextEdgesIndex + 1] = edge0;
+                nextEdges[nextEdgesIndex + 2] = edge1;
+                nextEdges[nextEdgesIndex + 3] = edge2;
+                nextEdgesIndex += 4;
                 
                 if (trianglesIndex >= triangles.length) {
                     triangles = Arrays.copyOf(triangles, triangles.length * 2);
@@ -343,9 +353,9 @@ public class ExperimentalLightmapUVGenerator {
         for (int i = 0; i < face.triangles.length; i++) {
             int triangle = face.triangles[i];
             
-            int v0 = (((triangle * 3) + 0) * this.vertexSize) + this.xyzOffset;
-            int v1 = (((triangle * 3) + 1) * this.vertexSize) + this.xyzOffset;
-            int v2 = (((triangle * 3) + 2) * this.vertexSize) + this.xyzOffset;
+            int v0 = ((triangle * 3) + 0) * VERTEX_SIZE;
+            int v1 = ((triangle * 3) + 1) * VERTEX_SIZE;
+            int v2 = ((triangle * 3) + 2) * VERTEX_SIZE;
             
             float v0x = this.vertices[v0 + 0];
             float v0y = this.vertices[v0 + 1];
@@ -365,18 +375,18 @@ public class ExperimentalLightmapUVGenerator {
             
             lookAt.transformProject(position.set(v0x, v0y, v0z));
             
-            float uv0x = position.x();
-            float uv0y = position.y();
+            float uv0x = position.x() * this.pixelToWorldRatio;
+            float uv0y = position.y() * this.pixelToWorldRatio;
             
             lookAt.transformProject(position.set(v1x, v1y, v1z));
             
-            float uv1x = position.x();
-            float uv1y = position.y();
+            float uv1x = position.x() * this.pixelToWorldRatio;
+            float uv1y = position.y() * this.pixelToWorldRatio;
             
             lookAt.transformProject(position.set(v2x, v2y, v2z));
             
-            float uv2x = position.x();
-            float uv2y = position.y();
+            float uv2x = position.x() * this.pixelToWorldRatio;
+            float uv2y = position.y() * this.pixelToWorldRatio;
             
             uvs[uv0 + 0] = uv0x;
             uvs[uv0 + 1] = uv0y;

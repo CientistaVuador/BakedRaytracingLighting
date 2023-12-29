@@ -33,6 +33,7 @@ package cientistavuador.bakedlighting.util;
 public class GaussianBlur {
 
     public static class GaussianColor {
+
         public float r;
         public float g;
         public float b;
@@ -45,6 +46,10 @@ public class GaussianBlur {
         public int height();
 
         public boolean outOfBounds(int x, int y);
+
+        public default boolean ignore(int x, int y) {
+            return false;
+        }
 
         public void write(int x, int y, GaussianColor color);
 
@@ -82,11 +87,19 @@ public class GaussianBlur {
         GaussianColor readGaussian = new GaussianColor();
 
         float[] colorMap = new float[(this.io.height() * this.io.width()) * 3];
-        
+
         for (int y = 0; y < this.io.height(); y++) {
             for (int x = 0; x < this.io.width(); x++) {
 
                 if (this.io.outOfBounds(x, y)) {
+                    continue;
+                }
+
+                if (this.io.ignore(x, y)) {
+                    this.io.read(x, y, readGaussian);
+                    colorMap[0 + (x * 3) + (y * this.io.width() * 3)] = readGaussian.r;
+                    colorMap[1 + (x * 3) + (y * this.io.width() * 3)] = readGaussian.g;
+                    colorMap[2 + (x * 3) + (y * this.io.width() * 3)] = readGaussian.b;
                     continue;
                 }
 
@@ -98,6 +111,10 @@ public class GaussianBlur {
                     int pX = x + (kernelX - (this.kernelSize / 2));
 
                     if (this.io.outOfBounds(pX, y)) {
+                        continue;
+                    }
+                    
+                    if (this.io.ignore(pX, y)) {
                         continue;
                     }
 
@@ -113,19 +130,27 @@ public class GaussianBlur {
                 r *= inverseWeightSum;
                 g *= inverseWeightSum;
                 b *= inverseWeightSum;
-                
+
                 colorMap[0 + (x * 3) + (y * this.io.width() * 3)] = r;
                 colorMap[1 + (x * 3) + (y * this.io.width() * 3)] = g;
                 colorMap[2 + (x * 3) + (y * this.io.width() * 3)] = b;
             }
         }
-        
+
         GaussianColor outGaussian = new GaussianColor();
-        
+
         for (int y = 0; y < this.io.height(); y++) {
             for (int x = 0; x < this.io.width(); x++) {
 
                 if (this.io.outOfBounds(x, y)) {
+                    continue;
+                }
+                
+                if (this.io.ignore(x, y)) {
+                    outGaussian.r = colorMap[0 + (x * 3) + (y * this.io.width() * 3)];
+                    outGaussian.g = colorMap[1 + (x * 3) + (y * this.io.width() * 3)];
+                    outGaussian.b = colorMap[2 + (x * 3) + (y * this.io.width() * 3)];
+                    this.io.write(x, y, outGaussian);
                     continue;
                 }
 
@@ -139,7 +164,11 @@ public class GaussianBlur {
                     if (this.io.outOfBounds(x, pY)) {
                         continue;
                     }
-
+                    
+                    if (this.io.ignore(x, pY)) {
+                        continue;
+                    }
+                    
                     float readR = colorMap[0 + (x * 3) + (pY * this.io.width() * 3)];
                     float readG = colorMap[1 + (x * 3) + (pY * this.io.width() * 3)];
                     float readB = colorMap[2 + (x * 3) + (pY * this.io.width() * 3)];
@@ -154,7 +183,7 @@ public class GaussianBlur {
                 r *= inverseWeightSum;
                 g *= inverseWeightSum;
                 b *= inverseWeightSum;
-                
+
                 outGaussian.r = r;
                 outGaussian.g = g;
                 outGaussian.b = b;
@@ -163,4 +192,3 @@ public class GaussianBlur {
         }
     }
 }
-
