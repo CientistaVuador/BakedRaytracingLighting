@@ -46,6 +46,8 @@ import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Face;
 import cientistavuador.bakedlighting.util.MeshUtils;
 import cientistavuador.bakedlighting.util.Pair;
 import cientistavuador.bakedlighting.util.RayResult;
+import cientistavuador.bakedlighting.util.SamplingMode;
+import cientistavuador.bakedlighting.util.Scene;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -73,7 +75,7 @@ public class Game {
 
     private final FreeCamera camera = new FreeCamera();
     private final List<RayResult> rays = new ArrayList<>();
-    private final BakedLighting.Scene scene = new BakedLighting.Scene();
+    private final Scene scene = new Scene();
 
     private BakedLighting.Status status = BakedLighting.dummyStatus();
 
@@ -99,7 +101,6 @@ public class Game {
         for (int i = 0; i < Geometries.GARAGE.length; i++) {
             this.scene.getGeometries().add(new Geometry(Geometries.GARAGE[i]));
         }
-
         Geometry ciencola = new Geometry(Geometries.CIENCOLA);
         this.scene.getGeometries().add(ciencola);
 
@@ -118,7 +119,7 @@ public class Game {
                 .scale(0.10f);
 
         ciencola.setModel(matrix);
-        
+
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
@@ -135,22 +136,22 @@ public class Game {
         int globalIndex = 0;
 
         //try {
-            //BufferedWriter writer = new BufferedWriter(new FileWriter("saida.obj"));
-            for (int i = 0; i < faces.size(); i++) {
-                Face face = faces.get(i);
-                //System.out.println("o face_"+i);
-                for (int v = 0; v < face.uvs.length; v += 2) {
-                    //writer.append("v " + face.uvs[v + 0] + " " + face.uvs[v + 1] + " " + (-(i * 0.25f)));
-                    //writer.newLine();
-                }
-                for (int v = 0; v < face.uvs.length; v += (2 * 3)) {
-                    int e = (v / 2) + globalIndex;
-                    //writer.append("f " + (e + 1) + " " + (e + 2) + " " + (e + 3));
-                    //writer.newLine();
-                }
-                globalIndex += (face.uvs.length / 2);
+        //BufferedWriter writer = new BufferedWriter(new FileWriter("saida.obj"));
+        for (int i = 0; i < faces.size(); i++) {
+            Face face = faces.get(i);
+            //System.out.println("o face_"+i);
+            for (int v = 0; v < face.uvs.length; v += 2) {
+                //writer.append("v " + face.uvs[v + 0] + " " + face.uvs[v + 1] + " " + (-(i * 0.25f)));
+                //writer.newLine();
             }
-            //writer.close();
+            for (int v = 0; v < face.uvs.length; v += (2 * 3)) {
+                int e = (v / 2) + globalIndex;
+                //writer.append("f " + (e + 1) + " " + (e + 2) + " " + (e + 3));
+                //writer.newLine();
+            }
+            globalIndex += (face.uvs.length / 2);
+        }
+        //writer.close();
         //} catch (IOException ex) {
         //    throw new UncheckedIOException(ex);
         //}
@@ -275,7 +276,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1024);
+                this.status = BakedLighting.bake(this.scene, 512);
             }
         }
     }
