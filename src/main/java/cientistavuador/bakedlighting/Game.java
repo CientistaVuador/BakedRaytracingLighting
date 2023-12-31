@@ -30,7 +30,6 @@ import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
-import cientistavuador.bakedlighting.geometry.GeometriesLoader;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
@@ -43,18 +42,10 @@ import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator;
 import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Face;
-import cientistavuador.bakedlighting.util.MeshUtils;
-import cientistavuador.bakedlighting.util.Pair;
 import cientistavuador.bakedlighting.util.RayResult;
-import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -124,12 +115,14 @@ public class Game {
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
         
+        this.scene.setIndirectLightReflectionFactor(4f);
+        
         float[] ciencolaVertices = Geometries.CIENCOLA.getVertices();
         List<Face> faces = new ExperimentalLightmapUVGenerator(
                 ciencolaVertices,
                 MeshData.SIZE,
                 MeshData.XYZ_OFFSET,
-                1f, 1f, 1f,
+                null,
                 1f / 0.05f
         ).process();
 

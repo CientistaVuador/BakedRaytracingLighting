@@ -39,29 +39,38 @@ import org.joml.Vector3fc;
 public class Scene {
     
     private final List<Geometry> geometries = new ArrayList<>();
+    
     private float sunSize = 0.03f;
-    private final Vector3f sunDirection = new Vector3f(0.5f, -1f, 1f).normalize();
+    private final Vector3f sunDirection = new Vector3f(0.5f, -1f, -1f).normalize();
     private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
-    private final Vector3f sunDiffuseColor = new Vector3f(1.5f, 1.5f, 1.5f);
-    private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.45f);
+    private final Vector3f sunDiffuseColor = new Vector3f(1.3f, 1.3f, 1.3f);
+    private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.5f);
+    
+    private SamplingMode samplingMode = SamplingMode.SAMPLE_4;
     
     private boolean directLightingEnabled = true;
-    private boolean shadowsEnabled = true;
-    private boolean indirectLightingEnabled = true;
     
-    private float shadowBlurArea = 1.5f;
-    private float indirectLightingBlurArea = 6f;
-    private SamplingMode samplingMode = SamplingMode.SAMPLE_5;
-    private float rayOffset = 0.001f;
-    private float indirectBounces = 4;
-    private int indirectRaysPerSample = 8;
+    private boolean shadowsEnabled = true;
     private int shadowRaysPerSample = 12;
-
+    private float shadowBlurArea = 1.5f;
+    
+    private boolean indirectLightingEnabled = true;
+    private int indirectRaysPerSample = 8;
+    private int indirectBounces = 4;
+    private float indirectLightingBlurArea = 6f;
+    private float indirectLightReflectionFactor = 1f;
+    
+    private float rayOffset = 0.001f;
+    
     public Scene() {
     }
 
     public List<Geometry> getGeometries() {
         return geometries;
+    }
+
+    public float getSunSize() {
+        return sunSize;
     }
 
     public Vector3fc getSunDirection() {
@@ -80,6 +89,10 @@ public class Scene {
         return sunAmbientColor;
     }
 
+    public void setSunSize(float sunSize) {
+        this.sunSize = sunSize;
+    }
+    
     public void setSunDirection(float x, float y, float z) {
         this.sunDirection.set(x, y, z).normalize();
         this.sunDirectionInverted.set(this.sunDirection).negate();
@@ -105,95 +118,93 @@ public class Scene {
         setSunAmbientColor(color.x(), color.y(), color.z());
     }
 
+    public SamplingMode getSamplingMode() {
+        return samplingMode;
+    }
+
+    public void setSamplingMode(SamplingMode samplingMode) {
+        this.samplingMode = samplingMode;
+    }
+    
     public boolean isDirectLightingEnabled() {
         return directLightingEnabled;
     }
 
-    public boolean isShadowsEnabled() {
-        return shadowsEnabled;
-    }
-
-    public boolean isIndirectLightingEnabled() {
-        return indirectLightingEnabled;
-    }
-
     public void setDirectLightingEnabled(boolean directLightingEnabled) {
         this.directLightingEnabled = directLightingEnabled;
+    }
+    
+    public boolean isShadowsEnabled() {
+        return shadowsEnabled;
     }
 
     public void setShadowsEnabled(boolean shadowsEnabled) {
         this.shadowsEnabled = shadowsEnabled;
     }
 
-    public void setIndirectLightingEnabled(boolean indirectLightingEnabled) {
-        this.indirectLightingEnabled = indirectLightingEnabled;
+    public int getShadowRaysPerSample() {
+        return shadowRaysPerSample;
     }
 
-    public float getIndirectLightingBlurArea() {
-        return indirectLightingBlurArea;
+    public void setShadowRaysPerSample(int shadowRaysPerSample) {
+        this.shadowRaysPerSample = shadowRaysPerSample;
     }
 
     public float getShadowBlurArea() {
         return shadowBlurArea;
     }
 
-    public void setIndirectLightingBlurArea(float indirectLightingBlurArea) {
-        this.indirectLightingBlurArea = indirectLightingBlurArea;
-    }
-
     public void setShadowBlurArea(float shadowBlurArea) {
         this.shadowBlurArea = shadowBlurArea;
     }
 
-    public SamplingMode getSamplingMode() {
-        return samplingMode;
+    public boolean isIndirectLightingEnabled() {
+        return indirectLightingEnabled;
     }
 
-    public void setSamplingMode(SamplingMode samplingMode) {
-        if (samplingMode == null) {
-            samplingMode = SamplingMode.SAMPLE_5;
-        }
-        this.samplingMode = samplingMode;
-    }
-
-    public float getSunSize() {
-        return sunSize;
-    }
-
-    public float getRayOffset() {
-        return rayOffset;
-    }
-
-    public float getIndirectBounces() {
-        return indirectBounces;
+    public void setIndirectLightingEnabled(boolean indirectLightingEnabled) {
+        this.indirectLightingEnabled = indirectLightingEnabled;
     }
 
     public int getIndirectRaysPerSample() {
         return indirectRaysPerSample;
     }
 
-    public int getShadowRaysPerSample() {
-        return shadowRaysPerSample;
+    public void setIndirectRaysPerSample(int indirectRaysPerSample) {
+        this.indirectRaysPerSample = indirectRaysPerSample;
     }
 
-    public void setSunSize(float sunSize) {
-        this.sunSize = sunSize;
+    public int getIndirectBounces() {
+        return indirectBounces;
+    }
+
+    public void setIndirectBounces(int indirectBounces) {
+        this.indirectBounces = indirectBounces;
+    }
+
+    public float getIndirectLightingBlurArea() {
+        return indirectLightingBlurArea;
+    }
+
+    public void setIndirectLightingBlurArea(float indirectLightingBlurArea) {
+        this.indirectLightingBlurArea = indirectLightingBlurArea;
+    }
+
+    public float getIndirectLightReflectionFactor() {
+        return indirectLightReflectionFactor;
+    }
+
+    public void setIndirectLightReflectionFactor(float indirectLightReflectionFactor) {
+        this.indirectLightReflectionFactor = indirectLightReflectionFactor;
+    }
+
+    public float getRayOffset() {
+        return rayOffset;
     }
 
     public void setRayOffset(float rayOffset) {
         this.rayOffset = rayOffset;
     }
 
-    public void setIndirectBounces(float indirectBounces) {
-        this.indirectBounces = indirectBounces;
-    }
 
-    public void setIndirectRaysPerSample(int indirectRaysPerSample) {
-        this.indirectRaysPerSample = indirectRaysPerSample;
-    }
-
-    public void setShadowRaysPerSample(int shadowRaysPerSample) {
-        this.shadowRaysPerSample = shadowRaysPerSample;
-    }
-    
 }

@@ -31,23 +31,22 @@ import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Formatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.joml.Matrix3f;
-import org.joml.Matrix3fc;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
-import org.lwjgl.opengl.EXTTextureCompressionS3TC;
-import org.lwjgl.opengl.GL;
 import static org.lwjgl.opengl.GL33C.*;
 import org.lwjgl.system.MemoryUtil;
 
@@ -212,7 +211,7 @@ public class BakedLighting {
         });
         return status;
     }
-    
+
     private static class WeightsBuffer {
 
         private final int lineSize;
@@ -226,7 +225,7 @@ public class BakedLighting {
             this.lineSize = size * this.vectorSize;
             this.data = new float[size * this.lineSize];
         }
-        
+
         public void write(Vector3f position, int x, int y, int sample) {
             this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = position.x();
             this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = position.y();
@@ -256,7 +255,7 @@ public class BakedLighting {
             this.lineSize = size * this.vectorSize;
             this.data = new int[size * this.lineSize];
         }
-        
+
         public void write(int triangle, int x, int y, int sample) {
             this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = triangle;
         }
@@ -280,7 +279,7 @@ public class BakedLighting {
             this.lineSize = size * this.vectorSize;
             this.data = new boolean[size * this.lineSize];
         }
-        
+
         public void write(boolean value, int x, int y, int sample) {
             this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = value;
         }
@@ -289,42 +288,35 @@ public class BakedLighting {
             return this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
         }
     }
-    
+
     private static class ColorBuffer {
 
         private final int lineSize;
         private final int sampleSize;
         private final int vectorSize;
-        private final byte[] data;
+        private final float[] data;
 
         public ColorBuffer(int size, int samples) {
             this.sampleSize = 3;
             this.vectorSize = this.sampleSize * samples;
             this.lineSize = size * this.vectorSize;
-            this.data = new byte[size * this.lineSize];
+            this.data = new float[size * this.lineSize];
         }
-        
+
         public void write(Vector3f color, int x, int y, int sample) {
-            int vx = (int) (color.x() * 255f);
-            int vy = (int) (color.y() * 255f);
-            int vz = (int) (color.z() * 255f);
-            this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) vx;
-            this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) vy;
-            this.data[2 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) vz;
+            this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = color.x();
+            this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = color.y();
+            this.data[2 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = color.z();
         }
 
         public void read(Vector3f color, int x, int y, int sample) {
-            byte vx = this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
-            byte vy = this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
-            byte vz = this.data[2 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
-            int vxu = ((int) vx) & 0xFF;
-            int vyu = ((int) vy) & 0xFF;
-            int vzu = ((int) vz) & 0xFF;
-            float inv = 1f / 255f;
+            float vx = this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
+            float vy = this.data[1 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
+            float vz = this.data[2 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
             color.set(
-                    vxu * inv,
-                    vyu * inv,
-                    vzu * inv
+                    vx,
+                    vy,
+                    vz
             );
         }
     }
@@ -381,6 +373,8 @@ public class BakedLighting {
     private ColorBuffer indirectColorBuffer = null;
     private ColorBuffer directColorBuffer = null;
     private GrayBuffer reverseShadowBuffer = null;
+
+    private ColorBuffer resultBuffer = null;
 
     private ByteBuffer outputBuffer = null;
     private Cleaner.Cleanable outputBufferCleanable = null;
@@ -555,13 +549,14 @@ public class BakedLighting {
                 .getDenoiserQuads();
 
         int numSamples = this.scene.getSamplingMode().numSamples();
-        
+
         this.sampleBuffer = new BooleanBuffer(this.geometryLightmapSize, numSamples);
         this.trianglesBuffer = new TriangleBuffer(this.geometryLightmapSize, numSamples);
         this.weightsBuffer = new WeightsBuffer(this.geometryLightmapSize, numSamples);
         this.indirectColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
         this.directColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
         this.reverseShadowBuffer = new GrayBuffer(this.geometryLightmapSize, numSamples);
+        this.resultBuffer = new ColorBuffer(this.geometryLightmapSize, 1);
         final ByteBuffer output = MemoryUtil.memCalloc(this.geometryLightmapSize * this.geometryLightmapSize * 3);
         this.outputBufferCleanable = ObjectCleaner.get().register(output, () -> {
             MemoryUtil.memFree(output);
@@ -632,7 +627,7 @@ public class BakedLighting {
             maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
 
             SamplingMode mode = this.scene.getSamplingMode();
-            
+
             for (int y = minY; y <= maxY; y++) {
                 for (int x = minX; x <= maxX; x++) {
                     for (int s = 0; s < mode.numSamples(); s++) {
@@ -705,22 +700,60 @@ public class BakedLighting {
         service.shutdown();
     }
 
-    private void processLine(int y) {
+    private static class SampleState {
 
-        int triangle = -1;
-        Vector3f triangleNormal = new Vector3f();
+        public final Random random = new Random();
+        public int x;
+        public int y;
+        public int s;
+        public int triangle = -1;
+        public final Vector3f triangleNormal = new Vector3f();
+        public final Vector3f position = new Vector3f();
+        public final Vector3f normal = new Vector3f();
+        public final Matrix3f TBN = new Matrix3f();
+    }
+
+    private class DirectState {
+
+        public final Vector3f output = new Vector3f();
+    }
+
+    private class ShadowState {
+
+        public float output;
+        public final Vector3f randomDirection = new Vector3f();
+        public final Vector3f offsetOrigin = new Vector3f();
+
+    }
+
+    private class IndirectState {
+
+        public final Vector3f output = new Vector3f();
+        public final Vector3f[] bounceColors = new Vector3f[BakedLighting.this.scene.getIndirectBounces()];
+
+        {
+            for (int i = 0; i < this.bounceColors.length; i++) {
+                this.bounceColors[i] = new Vector3f();
+            }
+        }
+        public final Vector3f lightColor = new Vector3f();
+        public final Vector3f randomLightDirection = new Vector3f();
+        public final Vector3f bouncePosition = new Vector3f();
+        public final Vector3f bounceDirection = new Vector3f();
+        public final Vector3f bounceWeights = new Vector3f();
+        public final float[] bounceColor = new float[4];
+    }
+
+    private void processLine(int y) {
+        SampleState state = new SampleState();
+        DirectState direct = new DirectState();
+        ShadowState shadow = new ShadowState();
+        IndirectState indirect = new IndirectState();
 
         Vector3f weights = new Vector3f();
 
-        Vector3f position = new Vector3f();
-        Vector3f normal = new Vector3f();
         Vector3f tangent = new Vector3f();
         Vector3f bitangent = new Vector3f();
-        Matrix3f TBN = new Matrix3f();
-
-        Vector3f outColor = new Vector3f();
-        Vector3f outIndirectColor = new Vector3f();
-        float[] outReversedShadow = {0f};
 
         int i0 = -1;
         int i1 = -1;
@@ -733,92 +766,90 @@ public class BakedLighting {
                     continue;
                 }
 
+                state.x = x;
+                state.y = y;
+                state.s = s;
+
                 int currentTriangle = this.trianglesBuffer.read(x, y, s);
-                if (currentTriangle != triangle) {
-                    triangle = currentTriangle;
-                    i0 = this.indices[(triangle * 3) + 0];
-                    i1 = this.indices[(triangle * 3) + 1];
-                    i2 = this.indices[(triangle * 3) + 2];
+                if (currentTriangle != state.triangle) {
+                    state.triangle = currentTriangle;
+                    i0 = this.indices[(currentTriangle * 3) + 0];
+                    i1 = this.indices[(currentTriangle * 3) + 1];
+                    i2 = this.indices[(currentTriangle * 3) + 2];
                     MeshUtils.calculateTriangleNormal(
                             this.vertices,
                             MeshData.SIZE,
                             MeshData.XYZ_OFFSET,
                             i0, i1, i2,
-                            triangleNormal
+                            state.triangleNormal
                     );
-                    this.geometry.getNormalModel().transform(triangleNormal);
+                    this.geometry.getNormalModel().transform(state.triangleNormal);
                 }
 
                 this.weightsBuffer.read(weights, x, y, s);
 
-                position.set(
+                state.position.set(
                         lerp(weights, i0, i1, i2, MeshData.XYZ_OFFSET + 0),
                         lerp(weights, i0, i1, i2, MeshData.XYZ_OFFSET + 1),
                         lerp(weights, i0, i1, i2, MeshData.XYZ_OFFSET + 2)
                 );
-                normal.set(
+                state.normal.set(
                         lerp(weights, i0, i1, i2, MeshData.N_XYZ_OFFSET + 0),
                         lerp(weights, i0, i1, i2, MeshData.N_XYZ_OFFSET + 1),
                         lerp(weights, i0, i1, i2, MeshData.N_XYZ_OFFSET + 2)
                 );
+
                 tangent.set(
                         lerp(weights, i0, i1, i2, MeshData.T_XYZ_OFFSET + 0),
                         lerp(weights, i0, i1, i2, MeshData.T_XYZ_OFFSET + 1),
                         lerp(weights, i0, i1, i2, MeshData.T_XYZ_OFFSET + 2)
                 );
 
-                this.geometry.getModel().transformProject(position);
-                this.geometry.getNormalModel().transform(normal);
+                this.geometry.getModel().transformProject(state.position);
+                this.geometry.getNormalModel().transform(state.normal);
                 this.geometry.getNormalModel().transform(tangent);
 
-                normal.normalize();
+                state.normal.normalize();
                 tangent.normalize();
-                bitangent.set(normal).cross(tangent).normalize();
+                bitangent.set(state.normal).cross(tangent).normalize();
 
-                TBN.set(tangent, bitangent, normal);
+                state.TBN.set(tangent, bitangent, state.normal);
 
-                outColor.zero();
-                outIndirectColor.zero();
-                outReversedShadow[0] = 1f;
+                direct.output.zero();
+                shadow.output = 0f;
+                indirect.output.zero();
 
                 processSample(
-                        x,
-                        y,
-                        s,
-                        triangle,
-                        triangleNormal,
-                        position,
-                        normal,
-                        TBN,
-                        outColor,
-                        outIndirectColor,
-                        outReversedShadow
+                        state,
+                        direct,
+                        shadow,
+                        indirect
                 );
 
-                outColor.set(
-                        Math.min(Math.max(outColor.x(), 0f), 1f),
-                        Math.min(Math.max(outColor.y(), 0f), 1f),
-                        Math.min(Math.max(outColor.z(), 0f), 1f)
-                );
-                outIndirectColor.set(
-                        Math.min(Math.max(outIndirectColor.x(), 0f), 1f),
-                        Math.min(Math.max(outIndirectColor.y(), 0f), 1f),
-                        Math.min(Math.max(outIndirectColor.z(), 0f), 1f)
-                );
-                outReversedShadow[0] = Math.min(Math.max(outReversedShadow[0], 0f), 1f);
-
-                this.indirectColorBuffer.write(outIndirectColor, x, y, s);
-                this.directColorBuffer.write(outColor, x, y, s);
-                this.reverseShadowBuffer.write(outReversedShadow[0], x, y, s);
+                this.directColorBuffer.write(direct.output, x, y, s);
+                this.reverseShadowBuffer.write(shadow.output, x, y, s);
+                this.indirectColorBuffer.write(indirect.output, x, y, s);
             }
         }
     }
 
-    private void randomSunDirection(Vector3f outDirection) {
+    private void randomSunDirection(Vector3f outDirection, Random random) {
+        float x;
+        float y;
+        float z;
+        float dist;
+
+        do {
+            x = (random.nextFloat() * 2f) - 1f;
+            y = (random.nextFloat() * 2f) - 1f;
+            z = (random.nextFloat() * 2f) - 1f;
+            dist = (x * x) + (y * y) + (z * z);
+        } while (dist > 1f);
+
         outDirection.set(
-                (Math.random() * 2.0) - 1.0,
-                (Math.random() * 2.0) - 1.0,
-                (Math.random() * 2.0) - 1.0
+                x,
+                y,
+                z
         )
                 .normalize()
                 .mul(this.scene.getSunSize())
@@ -826,162 +857,151 @@ public class BakedLighting {
                 .normalize();
     }
 
+    private void randomTangentDirection(Vector3f outDirection, Random random) {
+        float x;
+        float y;
+        float z;
+        float dist;
+
+        do {
+            x = (random.nextFloat() * 2f) - 1f;
+            y = (random.nextFloat() * 2f) - 1f;
+            z = random.nextFloat();
+            dist = (x * x) + (y * y) + (z * z);
+        } while (dist > 1f);
+
+        outDirection.set(
+                x,
+                y,
+                z
+        )
+                .normalize();
+    }
+
     private void processSample(
-            int pixelX,
-            int pixelY,
-            int sample,
-            int triangle,
-            Vector3fc triangleNormal,
-            Vector3fc position,
-            Vector3fc normal,
-            Matrix3fc TBN,
-            Vector3f outColor,
-            Vector3f outIndirectColor,
-            float[] outReversedShadow
+            SampleState state,
+            DirectState direct,
+            ShadowState shadow,
+            IndirectState indirect
     ) {
         if (this.scene.isDirectLightingEnabled()) {
-            processDirect(pixelX, pixelY, sample, triangle, triangleNormal, position, normal, TBN, outColor);
+            processDirect(state, direct);
         }
         if (this.scene.isShadowsEnabled()) {
-            processShadow(pixelX, pixelY, sample, triangle, triangleNormal, position, normal, TBN, outReversedShadow);
+            processShadow(state, shadow);
         }
         if (this.scene.isIndirectLightingEnabled()) {
-            processIndirect(pixelX, pixelY, sample, triangle, triangleNormal, position, normal, TBN, outIndirectColor);
+            processIndirect(state, indirect);
         }
     }
 
     private void processDirect(
-            int pixelX,
-            int pixelY,
-            int sample,
-            int triangle,
-            Vector3fc triangleNormal,
-            Vector3fc position,
-            Vector3fc normal,
-            Matrix3fc TBN,
-            Vector3f outColor
+            SampleState state,
+            DirectState direct
     ) {
-        outColor
+        direct.output
                 .set(this.scene.getSunDiffuseColor())
-                .mul(Math.max(normal.dot(this.scene.getSunDirectionInverted()), 0f));
+                .mul(Math.max(state.normal.dot(this.scene.getSunDirectionInverted()), 0f));
     }
 
     private void processShadow(
-            int pixelX,
-            int pixelY,
-            int sample,
-            int triangle,
-            Vector3fc triangleNormal,
-            Vector3fc position,
-            Vector3fc normal,
-            Matrix3fc TBN,
-            float[] outReversedShadow
+            SampleState state,
+            ShadowState shadow
     ) {
-        Vector3f offsetOrigin = new Vector3f(triangleNormal)
+        shadow.offsetOrigin
+                .set(state.triangleNormal)
                 .mul(this.scene.getRayOffset())
-                .add(position);
+                .add(state.position);
 
-        Vector3f randomDirection = new Vector3f();
-
-        float shadow = 0f;
+        float shadowValue = 0f;
         for (int i = 0; i < this.scene.getIndirectRaysPerSample(); i++) {
-            randomSunDirection(randomDirection);
-            if (Geometry.fastTestRay(offsetOrigin, randomDirection, this.scene.getGeometries())) {
-                shadow++;
+            randomSunDirection(shadow.randomDirection, state.random);
+            if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection, this.scene.getGeometries())) {
+                shadowValue++;
             }
             this.status.rays++;
         }
-        shadow /= this.scene.getIndirectRaysPerSample();
+        shadowValue /= this.scene.getIndirectRaysPerSample();
 
-        outReversedShadow[0] = 1f - shadow;
+        shadow.output = 1f - shadowValue;
     }
 
     private void processIndirect(
-            int pixelX,
-            int pixelY,
-            int sample,
-            int triangle,
-            Vector3fc triangleNormal,
-            Vector3fc position,
-            Vector3fc normal,
-            Matrix3fc TBN,
-            Vector3f outIndirectColor
+            SampleState state,
+            IndirectState indirect
     ) {
-        Vector3f randomDirection = new Vector3f();
-        Vector3f finalIndirect = new Vector3f();
-        for (int j = 0; j < this.scene.getIndirectRaysPerSample(); j++) {
-            Vector3f indirectLight = new Vector3f();
-            List<Vector3f> bounceColors = new ArrayList<>();
-            Vector3f bounceDir = TBN.transform(new Vector3f().set(
-                    (Math.random() - 0.5f) * 2f,
-                    (Math.random() - 0.5f) * 2f,
-                    Math.random()
-            ).normalize());
+        for (int i = 0; i < this.scene.getIndirectRaysPerSample(); i++) {
+            randomTangentDirection(indirect.bounceDirection, state.random);
+            state.TBN.transform(indirect.bounceDirection);
 
-            Vector3f hitWeights = new Vector3f();
-            Vector3f hitNormal = new Vector3f();
-            float[] colorOutput = new float[4];
+            float rayOffset = this.scene.getRayOffset();
+            float offsetX = state.triangleNormal.x() * rayOffset;
+            float offsetY = state.triangleNormal.y() * rayOffset;
+            float offsetZ = state.triangleNormal.z() * rayOffset;
 
-            this.weightsBuffer.read(hitWeights, pixelX, pixelY, sample);
+            indirect.bouncePosition
+                    .set(state.position)
+                    .add(offsetX, offsetY, offsetZ);
 
-            Vector3f bouncePos = new Vector3f(triangleNormal).mul(this.scene.getRayOffset());
-
-            float offsetX = bouncePos.x();
-            float offsetY = bouncePos.y();
-            float offsetZ = bouncePos.z();
-
-            bouncePos.set(position).add(offsetX, offsetY, offsetZ);
-
-            for (int i = 0; i < this.scene.getIndirectBounces(); i++) {
-                if (i != 0) {
-                    randomSunDirection(randomDirection);
+            boolean foundLight = false;
+            int bounceCount = 0;
+            for (int j = 0; j < this.scene.getIndirectBounces(); j++) {
+                if (j != 0) {
+                    randomSunDirection(indirect.randomLightDirection, state.random);
                     this.status.rays++;
-                    if (!Geometry.fastTestRay(bouncePos, randomDirection, this.scene.getGeometries())) {
-                        indirectLight.set(this.scene.getSunDiffuseColor());
+                    if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, this.scene.getGeometries())) {
+                        foundLight = true;
+                        indirect.lightColor.set(this.scene.getSunDiffuseColor());
                         break;
                     }
                 }
 
-                RayResult[] results = Geometry.testRay(bouncePos, bounceDir, this.scene.getGeometries());
                 this.status.rays++;
+                RayResult[] results = Geometry.testRay(indirect.bouncePosition, indirect.bounceDirection, this.scene.getGeometries());
                 if (results.length == 0) {
-                    indirectLight.set(this.scene.getSunAmbientColor());
+                    foundLight = true;
+                    indirect.lightColor.set(this.scene.getSunAmbientColor());
                     break;
                 }
-                RayResult hitPos = results[0];
 
-                hitPos.weights(hitWeights);
+                RayResult closestRay = results[0];
+                closestRay.weights(indirect.bounceWeights);
 
-                float normalX = hitPos.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 0);
-                float normalY = hitPos.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 1);
-                float normalZ = hitPos.lerp(hitWeights, MeshData.N_XYZ_OFFSET + 2);
+                float u = closestRay.lerp(indirect.bounceWeights, MeshData.UV_OFFSET + 0);
+                float v = closestRay.lerp(indirect.bounceWeights, MeshData.UV_OFFSET + 1);
 
-                hitNormal.set(normalX, normalY, normalZ).normalize();
-                hitPos.getGeometry().getNormalModel().transform(hitNormal);
+                SoftwareTexture rayTexture = this.sceneTextures.get(closestRay.getGeometry().getMesh().getTextureHint());
+                rayTexture.sampleNearest(u, v, indirect.bounceColor, 0);
+                indirect.bounceColors[bounceCount].set(indirect.bounceColor);
+                bounceCount++;
 
-                bounceDir.reflect(hitNormal);
-
-                float u = hitPos.lerp(hitWeights, MeshData.UV_OFFSET + 0);
-                float v = hitPos.lerp(hitWeights, MeshData.UV_OFFSET + 1);
-
-                this.sceneTextures.get(hitPos.getGeometry().getMesh().getTextureHint()).sampleNearest(u, v, colorOutput, 0);
-                bounceColors.add(new Vector3f(colorOutput));
-
-                bouncePos.set(hitPos.getTriangleNormal());
-                if (!hitPos.frontFace()) {
-                    bouncePos.negate();
+                indirect.bouncePosition.set(closestRay.getTriangleNormal());
+                if (!closestRay.frontFace()) {
+                    indirect.bouncePosition.negate();
                 }
-                bouncePos.mul(this.scene.getRayOffset());
+                indirect.bouncePosition
+                        .mul(this.scene.getRayOffset())
+                        .add(closestRay.getHitPosition());
 
-                bouncePos.add(hitPos.getHitPosition());
+                indirect.bounceDirection.reflect(closestRay.getTriangleNormal());
             }
-            for (Vector3f bounce : bounceColors) {
-                indirectLight.mul(bounce);
+
+            if (foundLight) {
+                if (bounceCount != 0) {
+                    Vector3f first = indirect.bounceColors[0];
+                    for (int j = 1; j < bounceCount; j++) {
+                        first.mul(indirect.bounceColors[j]);
+                    }
+                    first.mul(this.scene.getIndirectLightReflectionFactor());
+                    float r = Math.min(Math.max(first.x(), 0f), 1f);
+                    float g = Math.min(Math.max(first.y(), 0f), 1f);
+                    float b = Math.min(Math.max(first.z(), 0f), 1f);
+                    indirect.lightColor.mul(r, g, b);
+                }
+                indirect.output.add(indirect.lightColor);
             }
-            finalIndirect.add(indirectLight);
         }
-        finalIndirect.div(this.scene.getIndirectRaysPerSample());
-        outIndirectColor.set(finalIndirect);
+        indirect.output.div(this.scene.getIndirectRaysPerSample());
     }
 
     private void denoiseBuffers() {
@@ -1027,7 +1047,7 @@ public class BakedLighting {
 
     private void denoiseQuad(ColorBuffer indirectOutput, GrayBuffer reversedShadowOutput, int i) {
         int numSamples = this.scene.getSamplingMode().numSamples();
-        
+
         Vector3f color = new Vector3f();
 
         int minX = clamp(this.denoiserQuads[i + 0], 0, this.geometryLightmapSize);
@@ -1135,7 +1155,7 @@ public class BakedLighting {
 
         GaussianBlur.blur(
                 indirectIO,
-                31,
+                41,
                 this.scene.getIndirectLightingBlurArea()
         );
 
@@ -1184,15 +1204,15 @@ public class BakedLighting {
 
         GaussianBlur.blur(
                 reversedShadowIO,
-                31,
+                41,
                 this.scene.getShadowBlurArea()
         );
     }
 
-    private void sumBuffersAndOutput() {
+    private void combineBuffers() {
         int numSamples = this.scene.getSamplingMode().numSamples();
-        
-        byte[] lineColorData = new byte[this.geometryLightmapSize * 3];
+
+        Vector3f currentColor = new Vector3f();
 
         Vector3f lastValidAverage = new Vector3f();
         Vector3f direct = new Vector3f();
@@ -1201,7 +1221,7 @@ public class BakedLighting {
 
         this.status.setProgressBarStep(this.geometryLightmapSize);
         for (int y = 0; y < this.geometryLightmapSize; y++) {
-            setStatusText("Writing to Output Buffer (" + y + "/" + this.geometryLightmapSize + ")");
+            setStatusText("Combining Buffers (" + y + "/" + this.geometryLightmapSize + ")");
 
             lastValidAverage.zero();
             for (int x = 0; x < this.geometryLightmapSize; x++) {
@@ -1242,7 +1262,7 @@ public class BakedLighting {
                         sampleAverage.add(indirect);
                     }
                     indirect.set(sampleAverage.mul(invProcessedSamples));
-                    
+
                     direct.add(indirect);
 
                     lastValidAverage.set(direct);
@@ -1250,9 +1270,29 @@ public class BakedLighting {
                     direct.set(lastValidAverage);
                 }
 
-                int rColor = Math.min((int) (direct.x() * 255f), 255);
-                int gColor = Math.min((int) (direct.y() * 255f), 255);
-                int bColor = Math.min((int) (direct.z() * 255f), 255);
+                this.resultBuffer.read(currentColor, x, y, 0);
+                currentColor.add(direct);
+                this.resultBuffer.write(currentColor, x, y, 0);
+            }
+            this.status.stepProgressBar();
+        }
+
+    }
+
+    private void output() {
+        byte[] lineColorData = new byte[this.geometryLightmapSize * 3];
+
+        Vector3f color = new Vector3f();
+
+        this.status.setProgressBarStep(this.geometryLightmapSize);
+        for (int y = 0; y < this.geometryLightmapSize; y++) {
+            setStatusText("Writing to Output Buffer (" + y + "/" + this.geometryLightmapSize + ")");
+            for (int x = 0; x < this.geometryLightmapSize; x++) {
+                this.resultBuffer.read(color, x, y, 0);
+
+                int rColor = Math.min((int) (color.x() * 255f), 255);
+                int gColor = Math.min((int) (color.y() * 255f), 255);
+                int bColor = Math.min((int) (color.z() * 255f), 255);
                 rColor = Math.max(rColor, 0);
                 gColor = Math.max(gColor, 0);
                 bColor = Math.max(bColor, 0);
@@ -1265,7 +1305,6 @@ public class BakedLighting {
 
             this.status.stepProgressBar();
         }
-
     }
 
     private void createLightmapTexture() {
@@ -1282,14 +1321,8 @@ public class BakedLighting {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
 
-            int internalFormat = GL_RGB8;
-            if (GL.getCapabilities().GL_EXT_texture_compression_s3tc && 3 == 2) {
-                internalFormat = EXTTextureCompressionS3TC.GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
-                this.status.memoryUsage += (lightmapSizeCopy * lightmapSizeCopy) / 2;
-            } else {
-                this.status.memoryUsage += lightmapSizeCopy * lightmapSizeCopy * 3;
-            }
-            glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, lightmapSizeCopy, lightmapSizeCopy, 0, GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy);
+            this.status.memoryUsage += lightmapSizeCopy * lightmapSizeCopy * 3;
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, lightmapSizeCopy, lightmapSizeCopy, 0, GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy);
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1319,7 +1352,8 @@ public class BakedLighting {
             computeBuffers();
             bakeLightmap();
             denoiseBuffers();
-            sumBuffersAndOutput();
+            combineBuffers();
+            output();
             createLightmapTexture();
         }
     }

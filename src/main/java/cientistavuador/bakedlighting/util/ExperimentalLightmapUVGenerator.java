@@ -33,8 +33,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4i;
 
@@ -99,14 +99,19 @@ public class ExperimentalLightmapUVGenerator {
 
     private final List<Face> faces = new ArrayList<>();
 
-    public ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, float scaleX, float scaleY, float scaleZ, float pixelToWorldRatio) {
+    public ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
         this.vertices = new float[(vertices.length / vertexSize) * VERTEX_SIZE];
+        Vector3f position = new Vector3f();
         for (int v = 0; v < vertices.length; v += vertexSize) {
             int vertex = v / vertexSize;
             int vxyz = v + xyzOffset;
-            this.vertices[(vertex * VERTEX_SIZE) + 0] = vertices[vxyz + 0] * scaleX;
-            this.vertices[(vertex * VERTEX_SIZE) + 1] = vertices[vxyz + 1] * scaleY;
-            this.vertices[(vertex * VERTEX_SIZE) + 2] = vertices[vxyz + 2] * scaleZ;
+            position.set(vertices[vxyz + 0], vertices[vxyz + 1], vertices[vxyz + 2]);
+            if (model != null) {
+                model.transformProject(position);
+            }
+            this.vertices[(vertex * VERTEX_SIZE) + 0] = position.x();
+            this.vertices[(vertex * VERTEX_SIZE) + 1] = position.y();
+            this.vertices[(vertex * VERTEX_SIZE) + 2] = position.z();
         }
         this.pixelToWorldRatio = pixelToWorldRatio;
     }
