@@ -326,22 +326,21 @@ public class BakedLighting {
         private final int lineSize;
         private final int sampleSize;
         private final int vectorSize;
-        private final byte[] data;
+        private final float[] data;
 
         public GrayBuffer(int size, int samples) {
             this.sampleSize = 1;
             this.vectorSize = this.sampleSize * samples;
             this.lineSize = size * this.vectorSize;
-            this.data = new byte[size * this.lineSize];
+            this.data = new float[size * this.lineSize];
         }
 
         public void write(float value, int x, int y, int sample) {
-            this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = (byte) ((int) (value * 255f));
+            this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = value;
         }
 
         public float read(int x, int y, int sample) {
-            int gray = ((int) this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)]) & 0xFF;
-            return gray / 255f;
+            return this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
         }
     }
 
@@ -1106,8 +1105,8 @@ public class BakedLighting {
                     reversedShadowMap[localX + (localY * width)] = reversedShadow;
 
                     boundsMap[localX + (localY * width)] = true;
-
-                    if (reversedShadow >= (254f / 255f)) {
+                    
+                    if (reversedShadow >= 0.9999994f) {
                         ignoreMap[localX + (localY * width)] = true;
                     }
                 }

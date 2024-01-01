@@ -41,7 +41,7 @@ public class Scene {
     private final List<Geometry> geometries = new ArrayList<>();
     
     private float sunSize = 0.03f;
-    private final Vector3f sunDirection = new Vector3f(0.5f, -1f, -1f).normalize();
+    private final Vector3f sunDirection = new Vector3f(0.5f, -1f, 1f).normalize();
     private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
     private final Vector3f sunDiffuseColor = new Vector3f(1.3f, 1.3f, 1.3f);
     private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.5f);

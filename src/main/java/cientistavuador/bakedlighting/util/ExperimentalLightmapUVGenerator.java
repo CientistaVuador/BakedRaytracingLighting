@@ -86,20 +86,31 @@ public class ExperimentalLightmapUVGenerator {
         public float width;
         public float height;
     }
+    
+    private class Quad {
+        public Face face;
+        public int x;
+        public int y;
+        public int width;
+        public int height;
+    }
 
     private static final float TOLERANCE = 1f - (1f / 256f);
     private static final int VERTEX_SIZE = 3;
-    
-    private final float pixelToWorldRatio;
+    private static final int MARGIN = 1;
     
     private final float[] vertices;
+    private final float pixelToWorldRatio;
+    private final int lightmapSize;
 
     private final Map<Vertex, List<Vertex>> mappedVertices = new HashMap<>();
     private final Set<Integer> processedTriangles = new HashSet<>();
 
     private final List<Face> faces = new ArrayList<>();
+    private final List<Quad> quads = new ArrayList<>();
 
-    public ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
+    public ExperimentalLightmapUVGenerator(int lightmapSize, float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
+        this.lightmapSize = lightmapSize;
         this.vertices = new float[(vertices.length / vertexSize) * VERTEX_SIZE];
         Vector3f position = new Vector3f();
         for (int v = 0; v < vertices.length; v += vertexSize) {
@@ -419,10 +430,30 @@ public class ExperimentalLightmapUVGenerator {
         face.height = Math.abs(maxY - minY);
     }
 
+    public void createQuads() {
+        for (Face face:this.faces) {
+            Quad quad = new Quad();
+            quad.face = face;
+            quad.width = (int) (Math.ceil(face.width));
+            quad.height = (int) (Math.ceil(face.height));
+            quad.width += (MARGIN * 2);
+            quad.height += (MARGIN * 2);
+            this.quads.add(quad);
+        }
+    }
+    
+    public void fitQuads() {
+        for (Quad q:this.quads) {
+            
+        }
+    }
+    
     public List<Face> process() {
         mapVertices();
         buildFaces();
         generateFacesUVs();
+        createQuads();
+        fitQuads();
         return this.faces;
     }
 
