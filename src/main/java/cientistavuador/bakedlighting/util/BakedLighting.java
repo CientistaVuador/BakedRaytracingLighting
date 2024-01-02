@@ -1263,7 +1263,7 @@ public class BakedLighting {
                     indirect.set(sampleAverage.mul(invProcessedSamples));
 
                     direct.add(indirect);
-
+                    
                     lastValidAverage.set(direct);
                 } else {
                     direct.set(lastValidAverage);

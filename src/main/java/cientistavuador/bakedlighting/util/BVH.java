@@ -49,19 +49,34 @@ public class BVH implements Aab {
         }
 
         final float aabOffset = 0.0001f;
+        final int numberOfTriangles = indices.length / 3;
 
-        BVH[] currentArray = new BVH[indices.length / 3];
-        for (int i = 0; i < indices.length; i += 3) {
-            int v0 = (indices[i + 0] * vertexSize) + xyzOffset;
-            int v1 = (indices[i + 1] * vertexSize) + xyzOffset;
-            int v2 = (indices[i + 2] * vertexSize) + xyzOffset;
+        BVH[] currentArray = new BVH[numberOfTriangles];
 
-            float minX = Math.min(vertices[v0 + 0], Math.min(vertices[v1 + 0], vertices[v2 + 0]));
-            float minY = Math.min(vertices[v0 + 1], Math.min(vertices[v1 + 1], vertices[v2 + 1]));
-            float minZ = Math.min(vertices[v0 + 2], Math.min(vertices[v1 + 2], vertices[v2 + 2]));
-            float maxX = Math.max(vertices[v0 + 0], Math.max(vertices[v1 + 0], vertices[v2 + 0]));
-            float maxY = Math.max(vertices[v0 + 1], Math.max(vertices[v1 + 1], vertices[v2 + 1]));
-            float maxZ = Math.max(vertices[v0 + 2], Math.max(vertices[v1 + 2], vertices[v2 + 2]));
+        for (int i = 0; i < numberOfTriangles; i++) {
+            int v0 = (indices[(i * 3) + 0] * vertexSize) + xyzOffset;
+            int v1 = (indices[(i * 3) + 1] * vertexSize) + xyzOffset;
+            int v2 = (indices[(i * 3) + 2] * vertexSize) + xyzOffset;
+
+            float v0x = vertices[v0 + 0];
+            float v0y = vertices[v0 + 1];
+            float v0z = vertices[v0 + 2];
+
+            float v1x = vertices[v1 + 0];
+            float v1y = vertices[v1 + 1];
+            float v1z = vertices[v1 + 2];
+
+            float v2x = vertices[v2 + 0];
+            float v2y = vertices[v2 + 1];
+            float v2z = vertices[v2 + 2];
+
+            float minX = Math.min(v0x, Math.min(v1x, v2x));
+            float minY = Math.min(v0y, Math.min(v1y, v2y));
+            float minZ = Math.min(v0z, Math.min(v1z, v2z));
+
+            float maxX = Math.max(v0x, Math.max(v1x, v2x));
+            float maxY = Math.max(v0y, Math.max(v1y, v2y));
+            float maxZ = Math.max(v0z, Math.max(v1z, v2z));
 
             if (Math.abs(maxX - minX) < aabOffset) {
                 minX -= aabOffset;
@@ -87,69 +102,129 @@ public class BVH implements Aab {
                     maxX, maxY, maxZ
             );
             e.amountOfTriangles = 1;
-            e.triangles = new int[]{i / 3};
-            currentArray[i / 3] = e;
+            e.triangles = new int[]{i};
+            currentArray[i] = e;
         }
-        BVH[] nextArray = new BVH[(int) Math.ceil(currentArray.length / 2.0)];
 
-        while (currentArray.length != 1) {
-            for (int i = 0; i < currentArray.length; i += 2) {
-                BVH bvh = currentArray[i];
+        BVH[] nextArray = new BVH[numberOfTriangles];
+        int currentLength = nextArray.length;
+        int nextIndex = 0;
 
-                BVH output;
-                if ((i + 1) < currentArray.length) {
-                    float centerX = bvh.getMin().x() * 0.5f + bvh.getMax().x() * 0.5f;
-                    float centerY = bvh.getMin().y() * 0.5f + bvh.getMax().y() * 0.5f;
-                    float centerZ = bvh.getMin().z() * 0.5f + bvh.getMax().z() * 0.5f;
+        while (currentLength != 1) {
+            for (int i = 0; i < currentLength; i++) {
+                BVH current = currentArray[i];
 
-                    BVH closest = null;
-                    float distance = Float.POSITIVE_INFINITY;
-                    int index = 0;
-                    for (int j = (i + 1); j < currentArray.length; j++) {
-                        BVH other = currentArray[j];
-
-                        float otherCenterX = other.getMin().x() * 0.5f + other.getMax().x() * 0.5f;
-                        float otherCenterY = other.getMin().y() * 0.5f + other.getMax().y() * 0.5f;
-                        float otherCenterZ = other.getMin().z() * 0.5f + other.getMax().z() * 0.5f;
-
-                        float currentDistance = (float) Math.sqrt(Math.pow(centerX - otherCenterX, 2.0) + Math.pow(centerY - otherCenterY, 2.0) + Math.pow(centerZ - otherCenterZ, 2.0));
-
-                        if (currentDistance < distance) {
-                            distance = currentDistance;
-                            closest = other;
-                            index = j;
-                        }
-                    }
-                    if (closest == null) {
-                        throw new NullPointerException("Impossible NPE!");
-                    }
-                    currentArray[index] = currentArray[i + 1];
-
-                    float minX = Math.min(Math.min(bvh.getMin().x(), closest.getMin().x()), Math.min(bvh.getMax().x(), closest.getMax().x()));
-                    float minY = Math.min(Math.min(bvh.getMin().y(), closest.getMin().y()), Math.min(bvh.getMax().y(), closest.getMax().y()));
-                    float minZ = Math.min(Math.min(bvh.getMin().z(), closest.getMin().z()), Math.min(bvh.getMax().z(), closest.getMax().z()));
-                    float maxX = Math.max(Math.max(bvh.getMin().x(), closest.getMin().x()), Math.max(bvh.getMax().x(), closest.getMax().x()));
-                    float maxY = Math.max(Math.max(bvh.getMin().y(), closest.getMin().y()), Math.max(bvh.getMax().y(), closest.getMax().y()));
-                    float maxZ = Math.max(Math.max(bvh.getMin().z(), closest.getMin().z()), Math.max(bvh.getMax().z(), closest.getMax().z()));
-
-                    output = new BVH(vertices, indices, vertexSize, xyzOffset, minX, minY, minZ, maxX, maxY, maxZ);
-                    output.amountOfTriangles = bvh.amountOfTriangles + closest.amountOfTriangles;
-                    output.left = bvh;
-                    output.right = closest;
-
-                    bvh.parent = output;
-                    closest.parent = output;
-                } else {
-                    output = new BVH(vertices, indices, vertexSize, xyzOffset, bvh.getMin(), bvh.getMax());
-                    output.amountOfTriangles = bvh.amountOfTriangles;
-                    output.left = bvh;
-                    bvh.parent = output;
+                if (current == null) {
+                    continue;
                 }
 
-                nextArray[i / 2] = output;
+                float minX = current.getMin().x();
+                float minY = current.getMin().y();
+                float minZ = current.getMin().z();
+
+                float maxX = current.getMax().x();
+                float maxY = current.getMax().y();
+                float maxZ = current.getMax().z();
+
+                float centerX = (minX * 0.5f) + (maxX * 0.5f);
+                float centerY = (minY * 0.5f) + (maxY * 0.5f);
+                float centerZ = (minZ * 0.5f) + (maxZ * 0.5f);
+
+                BVH closest = null;
+                float closestDistance = Float.POSITIVE_INFINITY;
+                int closestIndex = -1;
+
+                float closestMinX = 0f;
+                float closestMinY = 0f;
+                float closestMinZ = 0f;
+
+                float closestMaxX = 0f;
+                float closestMaxY = 0f;
+                float closestMaxZ = 0f;
+
+                for (int j = 0; j < currentLength; j++) {
+                    BVH other = currentArray[j];
+
+                    if (j == i) {
+                        continue;
+                    }
+
+                    if (other == null) {
+                        continue;
+                    }
+
+                    float otherMinX = other.getMin().x();
+                    float otherMinY = other.getMin().y();
+                    float otherMinZ = other.getMin().z();
+
+                    float otherMaxX = other.getMax().x();
+                    float otherMaxY = other.getMax().y();
+                    float otherMaxZ = other.getMax().z();
+
+                    float otherCenterX = (otherMinX * 0.5f) + (otherMaxX * 0.5f);
+                    float otherCenterY = (otherMinY * 0.5f) + (otherMaxY * 0.5f);
+                    float otherCenterZ = (otherMinZ * 0.5f) + (otherMaxZ * 0.5f);
+
+                    float dX = centerX - otherCenterX;
+                    float dY = centerY - otherCenterY;
+                    float dZ = centerZ - otherCenterZ;
+
+                    float distance = (float) Math.sqrt((dX * dX) + (dY * dY) + (dZ * dZ));
+
+                    if (distance < closestDistance) {
+                        closest = other;
+                        closestDistance = distance;
+                        closestIndex = j;
+                        
+                        closestMinX = otherMinX;
+                        closestMinY = otherMinY;
+                        closestMinZ = otherMinZ;
+                        
+                        closestMaxX = otherMaxX;
+                        closestMaxY = otherMaxY;
+                        closestMaxZ = otherMaxZ;
+                    }
+                }
+
+                currentArray[i] = null;
+
+                if (closest == null) {
+                    nextArray[nextIndex++] = current;
+                    continue;
+                }
+                currentArray[closestIndex] = null;
+
+                float newMinX = Math.min(Math.min(minX, closestMinX), Math.min(maxX, closestMaxX));
+                float newMinY = Math.min(Math.min(minY, closestMinY), Math.min(maxY, closestMaxY));
+                float newMinZ = Math.min(Math.min(minZ, closestMinZ), Math.min(maxZ, closestMaxZ));
+
+                float newMaxX = Math.max(Math.max(minX, closestMinX), Math.max(maxX, closestMaxX));
+                float newMaxY = Math.max(Math.max(minY, closestMinY), Math.max(maxY, closestMaxY));
+                float newMaxZ = Math.max(Math.max(minZ, closestMinZ), Math.max(maxZ, closestMaxZ));
+                
+                BVH merge = new BVH(
+                        vertices,
+                        indices,
+                        vertexSize,
+                        xyzOffset,
+                        newMinX, newMinY, newMinZ,
+                        newMaxX, newMaxY, newMaxZ
+                );
+                merge.amountOfTriangles = current.amountOfTriangles + closest.amountOfTriangles;
+                merge.left = current;
+                merge.right = closest;
+                current.parent = merge;
+                closest.parent = merge;
+
+                nextArray[nextIndex++] = merge;
             }
+
+            currentLength = nextIndex;
+            nextIndex = 0;
+
+            BVH[] currentStore = currentArray;
             currentArray = nextArray;
-            nextArray = new BVH[(int) Math.ceil(currentArray.length / 2.0)];
+            nextArray = currentStore;
         }
 
         return currentArray[0];

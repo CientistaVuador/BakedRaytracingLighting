@@ -28,6 +28,7 @@ package cientistavuador.bakedlighting.util;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,6 +45,10 @@ import org.joml.Vector4i;
  */
 public class ExperimentalLightmapUVGenerator {
 
+    public static float[] generate(float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
+        return new ExperimentalLightmapUVGenerator(vertices, vertexSize, xyzOffset, model, pixelToWorldRatio).process();
+    }
+    
     private class Vertex {
         public int vertex;
 
@@ -87,12 +92,50 @@ public class ExperimentalLightmapUVGenerator {
         public float height;
     }
     
-    private class Quad {
+    private class AttachmentPoint {
+        public final int x;
+        public final int y;
+        
+        public AttachmentPoint(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+        
+        @Override
+        public int hashCode() {
+            int hash = 7;
+            hash = 31 * hash + this.x;
+            hash = 31 * hash + this.y;
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final AttachmentPoint other = (AttachmentPoint) obj;
+            if (this.x != other.x) {
+                return false;
+            }
+            return this.y == other.y;
+        }
+    }
+    
+    public class Quad {
         public Face face;
         public int x;
         public int y;
         public int width;
         public int height;
+        
+        public boolean rotate90 = false;
     }
 
     private static final float TOLERANCE = 1f - (1f / 256f);
@@ -101,16 +144,15 @@ public class ExperimentalLightmapUVGenerator {
     
     private final float[] vertices;
     private final float pixelToWorldRatio;
-    private final int lightmapSize;
 
     private final Map<Vertex, List<Vertex>> mappedVertices = new HashMap<>();
     private final Set<Integer> processedTriangles = new HashSet<>();
 
     private final List<Face> faces = new ArrayList<>();
     private final List<Quad> quads = new ArrayList<>();
+    private final List<Quad> addedQuads = new ArrayList<>();
 
-    public ExperimentalLightmapUVGenerator(int lightmapSize, float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
-        this.lightmapSize = lightmapSize;
+    private ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
         this.vertices = new float[(vertices.length / vertexSize) * VERTEX_SIZE];
         Vector3f position = new Vector3f();
         for (int v = 0; v < vertices.length; v += vertexSize) {
@@ -362,10 +404,10 @@ public class ExperimentalLightmapUVGenerator {
             return;
         }
         
-        float minX = Float.MAX_VALUE;
-        float minY = Float.MAX_VALUE;
-        float maxX = Float.MIN_VALUE;
-        float maxY = Float.MIN_VALUE;
+        float minX = Float.POSITIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
         for (int i = 0; i < face.triangles.length; i++) {
             int triangle = face.triangles[i];
             
@@ -422,8 +464,8 @@ public class ExperimentalLightmapUVGenerator {
         for (int v = 0; v < uvs.length; v += 2) {
             int vx = v + 0;
             int vy = v + 1;
-            uvs[vx] = uvs[vx] - minX;
-            uvs[vy] = uvs[vy] - minY;
+            uvs[vx] = (uvs[vx] - minX) + MARGIN;
+            uvs[vy] = (uvs[vy] - minY) + MARGIN;
         }
         
         face.width = Math.abs(maxX - minX);
@@ -440,21 +482,200 @@ public class ExperimentalLightmapUVGenerator {
             quad.height += (MARGIN * 2);
             this.quads.add(quad);
         }
+        this.faces.clear();
+    }
+    
+    public boolean testAabAab(
+            int minXA, int minYA,
+            int maxXA, int maxYA,
+            int minXB, int minYB,
+            int maxXB, int maxYB
+    ) {
+        return maxXA > minXB && maxYA > minYB && 
+               minXA < maxXB && minYA < maxYB;
+    }
+    
+    public boolean inCollision(Quad q) {
+        int x = q.x;
+        int y = q.y;
+        int width = q.width;
+        int height = q.height;
+        if (q.rotate90) {
+            width = q.height;
+            height = q.width;
+        }
+        
+        int minX = x;
+        int minY = y;
+        int maxX = x + width;
+        int maxY = y + height;
+        for (Quad other:this.addedQuads) {
+            int otherMinX = other.x;
+            int otherMinY = other.y;
+            
+            int otherMaxX;
+            int otherMaxY;
+            if (!other.rotate90) {
+                otherMaxX = other.x + other.width;
+                otherMaxY = other.y + other.height;
+            } else {
+                otherMaxX = other.x + other.height;
+                otherMaxY = other.y + other.width;
+            }
+            
+            if (testAabAab(
+                    minX, minY, maxX, maxY,
+                    otherMinX, otherMinY, otherMaxX, otherMaxY
+            )) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    public AttachmentPoint findBestAttachmentPoint(Quad q, Set<AttachmentPoint> attachments, int currentWidth, int currentHeight) {
+        AttachmentPoint best = null;
+        boolean rotated = false;
+        int bestArea = 0;
+        for (AttachmentPoint p:attachments) {
+            q.x = p.x;
+            q.y = p.y;
+            
+            int width = Math.max(q.x + q.width, currentWidth);
+            int height = Math.max(q.y + q.height, currentHeight);
+            int widthRotated = Math.max(q.x + q.height, currentWidth);
+            int heightRotated = Math.max(q.y + q.width, currentHeight);
+            
+            int area = width * height;
+            int areaRotated = widthRotated * heightRotated;
+            
+            q.rotate90 = area > areaRotated;
+            
+            int finalArea = q.rotate90 ? areaRotated : area;
+            
+            if (finalArea < bestArea || best == null) {
+                if (inCollision(q)) {
+                    continue;
+                }
+                best = p;
+                bestArea = finalArea;
+                rotated = q.rotate90;
+            }
+            
+        }
+        if (best != null) {
+            q.x = best.x;
+            q.y = best.y;
+            q.rotate90 = rotated;
+            return best;
+        }
+        return null;
     }
     
     public void fitQuads() {
-        for (Quad q:this.quads) {
+        if (this.quads.isEmpty()) {
+            return;
+        }
+        
+        Comparator<Quad> comparator = (o1, o2) -> {
+            int o1Area = o1.width * o1.height;
+            int o2Area = o2.width * o2.height;
+            return Integer.compare(o1Area, o2Area);
+        };
+        this.quads.sort(comparator.reversed());
+        
+        Quad first = this.quads.get(0);
+        this.addedQuads.add(first);
+        
+        Set<AttachmentPoint> topPoints = new HashSet<>();
+        Set<AttachmentPoint> rightPoints = new HashSet<>();
+        
+        topPoints.add(new AttachmentPoint(0, first.height));
+        rightPoints.add(new AttachmentPoint(first.width, 0));
+        
+        int currentWidth = first.width;
+        int currentHeight = first.height;
+        
+        for (int i = 1; i < this.quads.size(); i++) {
+            Quad q = this.quads.get(i);
             
+            Set<AttachmentPoint> priority;
+            Set<AttachmentPoint> fallback;
+            
+            if (currentWidth > currentHeight) {
+                priority = topPoints;
+                fallback = rightPoints;
+            } else {
+                priority = rightPoints;
+                fallback = topPoints;
+            }
+            
+            Set<AttachmentPoint> usedSet;
+            
+            AttachmentPoint point = findBestAttachmentPoint(q, priority, currentWidth, currentHeight);
+            usedSet = priority;
+            if (point == null) {
+                point = findBestAttachmentPoint(q, fallback, currentWidth, currentHeight);
+                usedSet = fallback;
+            }
+            
+            usedSet.remove(point);
+            
+            int x = q.x;
+            int y = q.y;
+            int width = q.width;
+            int height = q.height;
+            if (q.rotate90) {
+                width = q.height;
+                height = q.width;
+            }
+            
+            topPoints.add(new AttachmentPoint(x, y + height));
+            rightPoints.add(new AttachmentPoint(x + width, y));
+            
+            this.addedQuads.add(q);
+            
+            currentWidth = Math.max(currentWidth, x + width);
+            currentHeight = Math.max(currentHeight, y + height);
         }
     }
     
-    public List<Face> process() {
+    public float[] outputUVs() {
+        float[] output = new float[64];
+        int outputIndex = 0;
+        
+        for (Quad q:this.addedQuads) {
+            float[] uvs = q.face.uvs;
+            for (int v = 0; v < uvs.length; v += 2) {
+                float x;
+                float y;
+                if (!q.rotate90) {
+                    x = uvs[v + 0];
+                    y = uvs[v + 1];
+                } else {
+                    x = uvs[v + 1];
+                    y = uvs[v + 0];
+                }
+                x += q.x;
+                y += q.y;
+                if ((outputIndex + 2) > output.length) {
+                    output = Arrays.copyOf(output, output.length * 2);
+                }
+                output[outputIndex++] = x;
+                output[outputIndex++] = y;
+            }
+        }
+        
+        return Arrays.copyOf(output, outputIndex);
+    }
+    
+    public float[] process() {
         mapVertices();
         buildFaces();
         generateFacesUVs();
         createQuads();
         fitQuads();
-        return this.faces;
+        return outputUVs();
     }
 
 }

@@ -50,7 +50,7 @@ public class Geometries {
         concrete.setTextureHint(Textures.CONCRETE);
         grass.setTextureHint(Textures.GRASS);
         red.setTextureHint(Textures.RED);
-        GARAGE = new MeshData[] {grass, bricks, concrete, red, monkey};
+        GARAGE = new MeshData[] {concrete, grass, bricks, red, monkey};
         
         MeshData ciencola = meshes.get("ciencola.obj");
         ciencola.setTextureHint(Textures.CIENCOLA);

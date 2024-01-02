@@ -43,12 +43,14 @@ import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator;
 import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Face;
+import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Quad;
 import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -120,41 +122,44 @@ public class Game {
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
-        
-        
-        float[] ciencolaVertices = Geometries.CIENCOLA.getVertices();
-        List<Face> faces = new ExperimentalLightmapUVGenerator(
-                512,
+
+        this.scene.setShadowBlurArea(1f);
+
+        float[] ciencolaVertices = Geometries.GARAGE[4].getVertices();
+        float[] uvs = ExperimentalLightmapUVGenerator.generate(
                 ciencolaVertices,
                 MeshData.SIZE,
                 MeshData.XYZ_OFFSET,
                 null,
                 1f / 0.05f
-        ).process();
-
-        int globalIndex = 0;
+        );
 
         //try {
-        //BufferedWriter writer = new BufferedWriter(new FileWriter("saida.obj"));
-            for (int i = 0; i < faces.size(); i++) {
-                Face face = faces.get(i);
-            //System.out.println("o face_"+i);
-                for (int v = 0; v < face.uvs.length; v += 2) {
-                //writer.append("v " + face.uvs[v + 0] + " " + face.uvs[v + 1] + " " + (-(i * 0.25f)));
-                //writer.newLine();
-                }
-                for (int v = 0; v < face.uvs.length; v += (2 * 3)) {
-                    int e = (v / 2) + globalIndex;
-                //writer.append("f " + (e + 1) + " " + (e + 2) + " " + (e + 3));
-                //writer.newLine();
-                }
-                globalIndex += (face.uvs.length / 2);
+            //BufferedWriter out = new BufferedWriter(new FileWriter("saida.obj"));
+            for (int v = 0; v < uvs.length; v += (3 * 2)) {
+                float u0 = uvs[v + 0];
+                float v0 = uvs[v + 1];
+
+                float u1 = uvs[v + 2];
+                float v1 = uvs[v + 3];
+
+                float u2 = uvs[v + 4];
+                float v2 = uvs[v + 5];
+                
+                //out.write("v " + u0 + " " + v0);
+                //out.newLine();
+                //out.write("v " + u1 + " " + v1);
+                //out.newLine();
+                //out.write("v " + u2 + " " + v2);
+                //out.newLine();
+                //out.write("f " + ((v / 2) + 1) + " " + ((v / 2) + 2) + " " + ((v / 2) + 3));
+                //out.newLine();
             }
-        //writer.close();
+            //out.close();
         //} catch (IOException ex) {
-        //    throw new UncheckedIOException(ex);
+        //    ex.printStackTrace(System.out);
         //}
-        }
+    }
 
     public void loop() {
         for (RayResult r : this.rays) {
