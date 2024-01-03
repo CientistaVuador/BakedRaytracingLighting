@@ -29,14 +29,12 @@ package cientistavuador.bakedlighting.resources.mesh;
 import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.util.BVH;
-import cientistavuador.bakedlighting.util.LightmapUVGenerator;
+import cientistavuador.bakedlighting.util.LightmapUVs;
 import cientistavuador.bakedlighting.util.MeshUtils;
 import cientistavuador.bakedlighting.util.ObjectCleaner;
 import cientistavuador.bakedlighting.util.Pair;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import org.lwjgl.opengl.GL;
@@ -57,7 +55,9 @@ public class MeshData {
     public static final int N_XYZ_OFFSET = 0 + 3 + 2;
     public static final int T_XYZ_OFFSET = 0 + 3 + 2 + 3;
     public static final int L_UV_OFFSET = 0 + 3 + 2 + 3 + 3;
-
+    
+    public static final float TOLERANCE = 0.00001f;
+    
     private static void configureBoundVAO() {
         //position
         glEnableVertexAttribArray(0);
@@ -75,29 +75,37 @@ public class MeshData {
         glEnableVertexAttribArray(3);
         glVertexAttribPointer(3, 3, GL_FLOAT, false, MeshData.SIZE * Float.BYTES, (T_XYZ_OFFSET * Float.BYTES));
     }
-
+    
     public static class LightmapMesh {
 
         private final MeshData parent;
-        private final int lightmapSize;
-        private final CompletableFuture<LightmapUVGenerator.LightmapUVGeneratorOutput> futureLightmap;
-
-        private float[] lightmapUVsBake;
-        private float[] lightmapUVsRender;
-        private int[] denoiserQuads;
-
+        private final float pixelToWorldRatio;
+        private final float scaleX;
+        private final float scaleY;
+        private final float scaleZ;
+        
+        private final CompletableFuture<LightmapUVs.GeneratorOutput> futureLightmap;
+        
+        private boolean done = false;
+        private LightmapUVs.LightmapperQuad[] quads = null;
+        private float[] uvs = null;
+        private int lightmapSize = 0;
+        
         private int vbo = 0;
         private int vao = 0;
 
-        public LightmapMesh(MeshData parent, int lightmapSize) {
+        public LightmapMesh(MeshData parent, float worldToPixelRatio, float scaleX, float scaleY, float scaleZ) {
             this.parent = parent;
-            this.lightmapSize = lightmapSize;
+            this.pixelToWorldRatio = worldToPixelRatio;
+            this.scaleX = scaleX;
+            this.scaleY = scaleY;
+            this.scaleZ = scaleZ;
             this.futureLightmap = CompletableFuture.supplyAsync(() -> {
-                return MeshUtils.generateLightmapUV(
-                        parent.getVertices(),
+                return LightmapUVs.generate(parent.getVertices(),
                         MeshData.SIZE,
                         MeshData.XYZ_OFFSET,
-                        lightmapSize
+                        this.pixelToWorldRatio,
+                        scaleX, scaleY, scaleZ
                 );
             });
         }
@@ -106,40 +114,50 @@ public class MeshData {
             return parent;
         }
 
-        public int getLightmapSize() {
-            return lightmapSize;
+        public float getPixelToWorldRatio() {
+            return pixelToWorldRatio;
+        }
+
+        public float getScaleX() {
+            return scaleX;
+        }
+
+        public float getScaleY() {
+            return scaleY;
+        }
+
+        public float getScaleZ() {
+            return scaleZ;
         }
 
         private void ensureProcessingIsDone() {
-            if (this.lightmapUVsBake != null && this.lightmapUVsRender != null) {
+            if (this.done) {
                 return;
             }
             try {
-                LightmapUVGenerator.LightmapUVGeneratorOutput output = futureLightmap.get();
-                float[] forBake = output.forBaking();
-                float[] forRender = output.forRendering();
-                int[] forDenoising = output.forDenoising();
-                this.lightmapUVsBake = forBake;
-                this.lightmapUVsRender = forRender;
-                this.denoiserQuads = forDenoising;
+                LightmapUVs.GeneratorOutput output = this.futureLightmap.get();
+                this.quads = output.getQuads();
+                this.uvs = output.getUVs();
+                this.lightmapSize = output.getLightmapSize();
+                this.done = true;
             } catch (InterruptedException | ExecutionException ex) {
                 throw new RuntimeException(ex);
             }
         }
 
-        public float[] getLightmapUVsBake() {
+        public int getLightmapSize() {
             ensureProcessingIsDone();
-            return lightmapUVsBake;
+            return lightmapSize;
         }
 
-        public float[] getLightmapUVsRender() {
+        public float[] getUVs() {
             ensureProcessingIsDone();
-            return lightmapUVsRender;
+            return uvs;
         }
 
-        public int[] getDenoiserQuads() {
+        public LightmapUVs.LightmapperQuad[] getQuads() {
             ensureProcessingIsDone();
-            return denoiserQuads;
+            return quads;
         }
 
         public int getVAO() {
@@ -160,7 +178,7 @@ public class MeshData {
                 //lightmap uv
                 this.vbo = glGenBuffers();
                 glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
-                glBufferData(GL_ARRAY_BUFFER, getLightmapUVsRender(), GL_STATIC_DRAW);
+                glBufferData(GL_ARRAY_BUFFER, getUVs(), GL_STATIC_DRAW);
                 glEnableVertexAttribArray(4);
                 glVertexAttribPointer(4, 2, GL_FLOAT, false, 2 * Float.BYTES, 0);
                 glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -185,7 +203,7 @@ public class MeshData {
         }
 
         public boolean isDone() {
-            return this.futureLightmap.isDone();
+            return this.done;
         }
 
     }
@@ -336,51 +354,44 @@ public class MeshData {
     public boolean hasLightmapSupport() {
         return this.lightmapSupport;
     }
-
-    public LightmapMesh getLightmapMesh(int lightmapSize) {
+    
+    public LightmapMesh getLightmapMesh(float pixelToWorldRatio, float scaleX, float scaleY, float scaleZ) {
         if (!hasLightmapSupport()) {
             return null;
         }
-        LightmapMesh result = null;
         synchronized (this.lightmapMeshes) {
             for (LightmapMesh m : this.lightmapMeshes) {
-                if (m.getLightmapSize() == lightmapSize) {
-                    result = m;
-                    break;
+                if (Math.abs(m.getPixelToWorldRatio() - pixelToWorldRatio) <= TOLERANCE
+                        && Math.abs(scaleX - m.getScaleX()) <= TOLERANCE
+                        && Math.abs(scaleY - m.getScaleY()) <= TOLERANCE
+                        && Math.abs(scaleZ - m.getScaleZ()) <= TOLERANCE
+                        ) {
+                    return m;
                 }
             }
         }
-        return result;
+        return null;
     }
-
-    public int[] getSupportedLightmapSizes() {
-        if (!hasLightmapSupport()) {
-            return new int[0];
-        }
-        int[] output;
+    
+    public LightmapMesh[] getLightmapMeshes() {
         synchronized (this.lightmapMeshes) {
-            output = new int[this.lightmapMeshes.size()];
-            for (int i = 0; i < this.lightmapMeshes.size(); i++) {
-                output[i] = this.lightmapMeshes.get(i).getLightmapSize();
-            }
+            return this.lightmapMeshes.toArray(LightmapMesh[]::new);
         }
-        return output;
     }
-
-    public LightmapMesh scheduleLightmapMesh(int lightmapSize) {
+    
+    public LightmapMesh scheduleLightmapMesh(float pixelToWorldRatio, float scaleX, float scaleY, float scaleZ) {
         if (!hasLightmapSupport()) {
             return null;
         }
-        LightmapMesh mesh;
         synchronized (this.lightmapMeshes) {
-            mesh = getLightmapMesh(lightmapSize);
+            LightmapMesh mesh = getLightmapMesh(pixelToWorldRatio, scaleX, scaleY, scaleZ);
             if (mesh != null) {
                 return mesh;
             }
-            mesh = new LightmapMesh(this, lightmapSize);
+            mesh = new LightmapMesh(this, pixelToWorldRatio, scaleX, scaleY, scaleZ);
             this.lightmapMeshes.add(mesh);
+            return mesh;
         }
-        return mesh;
     }
     
 }

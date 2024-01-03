@@ -41,15 +41,10 @@ import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
-import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator;
+import cientistavuador.bakedlighting.util.LightmapUVs;
 import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -120,33 +115,33 @@ public class Game {
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
-
-        this.scene.setShadowBlurArea(1f);
-
-        float[] ciencolaVertices = Geometries.GARAGE[4].getVertices();
-        ExperimentalLightmapUVGenerator.GeneratorOutput output = ExperimentalLightmapUVGenerator.generate(
-                ciencolaVertices,
-                MeshData.SIZE,
-                MeshData.XYZ_OFFSET,
-                null,
-                1f / 0.05f
-        );
         
-        System.out.println("Lightmap Size: "+output.getLightmapSize());
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_5);
+
+        /*float[] ciencolaVertices = Geometries.GARAGE[4].getVertices();
+        LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
+        ciencolaVertices,
+        MeshData.SIZE,
+        MeshData.XYZ_OFFSET,
+        null,
+        1f / 0.05f
+        );*/
         
-        float[] uvs = output.getUVs();
+        //System.out.println("Lightmap Size: "+output.getLightmapSize());
+        
+        //float[] uvs = output.getUVs();
         
         //try {
             //BufferedWriter out = new BufferedWriter(new FileWriter("saida.obj"));
-            for (int v = 0; v < uvs.length; v += (3 * 2)) {
-                float u0 = uvs[v + 0];
-                float v0 = uvs[v + 1];
+            //for (int v = 0; v < uvs.length; v += (3 * 2)) {
+                //float u0 = uvs[v + 0];
+                //float v0 = uvs[v + 1];
 
-                float u1 = uvs[v + 2];
-                float v1 = uvs[v + 3];
+                //float u1 = uvs[v + 2];
+                //float v1 = uvs[v + 3];
 
-                float u2 = uvs[v + 4];
-                float v2 = uvs[v + 5];
+                //float u2 = uvs[v + 4];
+                //float v2 = uvs[v + 5];
                 
                 //out.write("v " + u0 + " " + v0);
                 //out.newLine();
@@ -156,7 +151,7 @@ public class Game {
                 //out.newLine();
                 //out.write("f " + ((v / 2) + 1) + " " + ((v / 2) + 2) + " " + ((v / 2) + 3));
                 //out.newLine();
-            }
+           // }
             //out.close();
         //} catch (IOException ex) {
         //    ex.printStackTrace(System.out);
@@ -195,13 +190,12 @@ public class Game {
             program.setModel(geo.getModel());
 
             MeshData mesh = geo.getMesh();
-            int lightmapSize = geo.getLightmapTextureSizeHint();
-
-            MeshData.LightmapMesh lightmapMesh = mesh.getLightmapMesh(lightmapSize);
-            if (lightmapMesh == null) {
+            MeshData.LightmapMesh lightmap = geo.getLightmapMesh();
+            
+            if (lightmap == null || !lightmap.isDone()) {
                 glBindVertexArray(mesh.getVAO());
             } else {
-                glBindVertexArray(lightmapMesh.getVAO());
+                glBindVertexArray(lightmap.getVAO());
             }
             mesh.render();
             glBindVertexArray(0);
@@ -282,11 +276,11 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 512);
+                this.status = BakedLighting.bake(this.scene, 1f / 0.05f);
             }
         }
     }
-
+    
     public void mouseCallback(long window, int button, int action, int mods) {
 
     }

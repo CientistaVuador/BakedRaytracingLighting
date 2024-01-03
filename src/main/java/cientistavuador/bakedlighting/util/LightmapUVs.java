@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.joml.Matrix4f;
-import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector4i;
 
@@ -43,7 +42,7 @@ import org.joml.Vector4i;
  *
  * @author Cien
  */
-public class ExperimentalLightmapUVGenerator {
+public class LightmapUVs {
 
     public static class LightmapperQuad {
 
@@ -114,8 +113,8 @@ public class ExperimentalLightmapUVGenerator {
 
     }
 
-    public static GeneratorOutput generate(float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
-        return new ExperimentalLightmapUVGenerator(vertices, vertexSize, xyzOffset, model, pixelToWorldRatio).process();
+    public static GeneratorOutput generate(float[] vertices, int vertexSize, int xyzOffset, float pixelToWorldRatio, float scaleX, float scaleY, float scaleZ) {
+        return new LightmapUVs(vertices, vertexSize, xyzOffset, pixelToWorldRatio, scaleX, scaleY, scaleZ).process();
     }
 
     private class Vertex {
@@ -126,7 +125,7 @@ public class ExperimentalLightmapUVGenerator {
         public int hashCode() {
             int hash = 7;
             for (int i = 0; i < 3; i++) {
-                hash = 79 * hash + Float.floatToRawIntBits(ExperimentalLightmapUVGenerator.this.vertices[this.vertex + i]);
+                hash = 79 * hash + Float.floatToRawIntBits(LightmapUVs.this.vertices[this.vertex + i]);
             }
             return hash;
         }
@@ -144,8 +143,8 @@ public class ExperimentalLightmapUVGenerator {
             }
             final Vertex other = (Vertex) obj;
             for (int i = 0; i < 3; i++) {
-                float t = ExperimentalLightmapUVGenerator.this.vertices[this.vertex + i];
-                float o = ExperimentalLightmapUVGenerator.this.vertices[other.vertex + i];
+                float t = LightmapUVs.this.vertices[this.vertex + i];
+                float o = LightmapUVs.this.vertices[other.vertex + i];
                 if (t != o) {
                     return false;
                 }
@@ -243,19 +242,14 @@ public class ExperimentalLightmapUVGenerator {
 
     private final List<LightmapperQuad> lightmapperQuads = new ArrayList<>();
     
-    private ExperimentalLightmapUVGenerator(float[] vertices, int vertexSize, int xyzOffset, Matrix4fc model, float pixelToWorldRatio) {
+    private LightmapUVs(float[] vertices, int vertexSize, int xyzOffset, float pixelToWorldRatio, float scaleX, float scaleY, float scaleZ) {
         this.vertices = new float[(vertices.length / vertexSize) * VERTEX_SIZE];
-        Vector3f position = new Vector3f();
         for (int v = 0; v < vertices.length; v += vertexSize) {
             int vertex = v / vertexSize;
             int vxyz = v + xyzOffset;
-            position.set(vertices[vxyz + 0], vertices[vxyz + 1], vertices[vxyz + 2]);
-            if (model != null) {
-                model.transformProject(position);
-            }
-            this.vertices[(vertex * VERTEX_SIZE) + 0] = position.x();
-            this.vertices[(vertex * VERTEX_SIZE) + 1] = position.y();
-            this.vertices[(vertex * VERTEX_SIZE) + 2] = position.z();
+            this.vertices[(vertex * VERTEX_SIZE) + 0] = vertices[vxyz + 0] * scaleX;
+            this.vertices[(vertex * VERTEX_SIZE) + 1] = vertices[vxyz + 1] * scaleY;
+            this.vertices[(vertex * VERTEX_SIZE) + 2] = vertices[vxyz + 2] * scaleZ;
         }
         this.pixelToWorldRatio = pixelToWorldRatio;
     }

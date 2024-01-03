@@ -98,7 +98,7 @@ public class Geometry {
     private final Matrix3f inverseNormalModel = new Matrix3f();
     
     private int lightmapTextureHint = Textures.EMPTY_LIGHTMAP_TEXTURE;
-    private int lightmapTextureSizeHint = 1;
+    private MeshData.LightmapMesh lightmapMesh = null;
     
     public Geometry(MeshData mesh) {
         this.mesh = mesh;
@@ -139,12 +139,12 @@ public class Geometry {
         this.lightmapTextureHint = lightmapTextureHint;
     }
 
-    public int getLightmapTextureSizeHint() {
-        return lightmapTextureSizeHint;
+    public MeshData.LightmapMesh getLightmapMesh() {
+        return lightmapMesh;
     }
 
-    public void setLightmapTextureSizeHint(int lightmapTextureSizeHint) {
-        this.lightmapTextureSizeHint = lightmapTextureSizeHint;
+    public void setLightmapMesh(MeshData.LightmapMesh lightmapMesh) {
+        this.lightmapMesh = lightmapMesh;
     }
     
 }
