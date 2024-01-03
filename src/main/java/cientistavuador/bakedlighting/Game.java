@@ -42,8 +42,6 @@ import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator;
-import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Face;
-import cientistavuador.bakedlighting.util.ExperimentalLightmapUVGenerator.Quad;
 import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
@@ -126,14 +124,18 @@ public class Game {
         this.scene.setShadowBlurArea(1f);
 
         float[] ciencolaVertices = Geometries.GARAGE[4].getVertices();
-        float[] uvs = ExperimentalLightmapUVGenerator.generate(
+        ExperimentalLightmapUVGenerator.GeneratorOutput output = ExperimentalLightmapUVGenerator.generate(
                 ciencolaVertices,
                 MeshData.SIZE,
                 MeshData.XYZ_OFFSET,
                 null,
                 1f / 0.05f
         );
-
+        
+        System.out.println("Lightmap Size: "+output.getLightmapSize());
+        
+        float[] uvs = output.getUVs();
+        
         //try {
             //BufferedWriter out = new BufferedWriter(new FileWriter("saida.obj"));
             for (int v = 0; v < uvs.length; v += (3 * 2)) {
