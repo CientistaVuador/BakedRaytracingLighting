@@ -55,12 +55,15 @@ public class Scene {
     private float shadowBlurArea = 1.5f;
     
     private boolean indirectLightingEnabled = true;
+    private boolean useAmbientColorIfIndirectIsDisabled = false;
     private int indirectRaysPerSample = 8;
     private int indirectBounces = 4;
     private float indirectLightingBlurArea = 6f;
     private float indirectLightReflectionFactor = 1f;
     
     private float rayOffset = 0.001f;
+    
+    private boolean fastModeEnabled = false;
     
     public Scene() {
     }
@@ -206,5 +209,20 @@ public class Scene {
         this.rayOffset = rayOffset;
     }
 
+    public boolean isFastModeEnabled() {
+        return fastModeEnabled;
+    }
 
+    public void setFastModeEnabled(boolean fastModeEnabled) {
+        this.fastModeEnabled = fastModeEnabled;
+    }
+
+    public void setUseAmbientColorIfIndirectIsDisabled(boolean useAmbientColorIfIndirectIsDisabled) {
+        this.useAmbientColorIfIndirectIsDisabled = useAmbientColorIfIndirectIsDisabled;
+    }
+
+    public boolean isUseAmbientColorIfIndirectIsDisabled() {
+        return useAmbientColorIfIndirectIsDisabled;
+    }
+    
 }

@@ -29,10 +29,8 @@ package cientistavuador.bakedlighting.util;
 import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
-import java.io.File;
 import java.lang.ref.Cleaner;
 import java.nio.ByteBuffer;
-import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Formatter;
 import java.util.HashMap;
@@ -44,9 +42,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import javax.imageio.ImageIO;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.joml.Matrix3f;
-import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 import static org.lwjgl.opengl.GL33C.*;
@@ -261,7 +259,7 @@ public class BakedLighting {
         public void write(int data, int x, int y, int sample) {
             this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)] = data;
         }
-        
+
         public int read(int x, int y, int sample) {
             return this.data[0 + (sample * this.sampleSize) + (x * this.vectorSize) + (y * this.lineSize)];
         }
@@ -346,8 +344,12 @@ public class BakedLighting {
         }
     }
 
+    private final ExecutorService threads = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
     private final Scene scene;
     private final List<Geometry> geometries;
+    private final SamplingMode samplingMode;
+    private final boolean fastMode;
     private final float pixelToWorldRatio;
     private final Status status;
 
@@ -383,6 +385,8 @@ public class BakedLighting {
         this.geometries = scene.getGeometries();
         this.pixelToWorldRatio = pixelToWorldRatio;
         this.status = status;
+        this.samplingMode = scene.getSamplingMode();
+        this.fastMode = scene.isFastModeEnabled();
     }
 
     private void setStatusText(String s) {
@@ -441,7 +445,7 @@ public class BakedLighting {
                             this.pixelToWorldRatio,
                             scale.x(), scale.y(), scale.z()
                     );
-            
+
             this.status.stepProgressBar();
         }
     }
@@ -483,7 +487,7 @@ public class BakedLighting {
         this.vertices = this.geometry.getMesh().getVertices();
         this.indices = this.geometry.getMesh().getIndices();
 
-        int numSamples = this.scene.getSamplingMode().numSamples();
+        int numSamples = this.samplingMode.numSamples();
 
         this.sampleBuffer = new BooleanBuffer(this.geometryLightmapSize, numSamples);
         this.trianglesBuffer = new IntegerDataBuffer(this.geometryLightmapSize, numSamples);
@@ -493,7 +497,7 @@ public class BakedLighting {
         this.directColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
         this.reverseShadowBuffer = new GrayBuffer(this.geometryLightmapSize, numSamples);
         this.resultBuffer = new ColorBuffer(this.geometryLightmapSize, 1);
-        final ByteBuffer output = MemoryUtil.memCalloc(this.geometryLightmapSize * this.geometryLightmapSize * 4);
+        final ByteBuffer output = MemoryUtil.memCalloc(this.geometryLightmapSize * this.geometryLightmapSize * 3);
         this.outputBufferCleanable = ObjectCleaner.get().register(output, () -> {
             MemoryUtil.memFree(output);
         });
@@ -540,7 +544,7 @@ public class BakedLighting {
 
             for (int j = 0; j < triangles.length; j++) {
                 int triangle = triangles[j];
-                
+
                 float v0x = lightmapVertices[(((j * 3) + 0) * 2) + 0] + quad.getX();
                 float v0y = lightmapVertices[(((j * 3) + 0) * 2) + 1] + quad.getY();
 
@@ -564,7 +568,7 @@ public class BakedLighting {
                 maxX = clamp(maxX, 0, this.geometryLightmapSize - 1);
                 maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
 
-                SamplingMode mode = this.scene.getSamplingMode();
+                SamplingMode mode = this.samplingMode;
 
                 for (int y = minY; y <= maxY; y++) {
                     for (int x = minX; x <= maxX; x++) {
@@ -602,7 +606,6 @@ public class BakedLighting {
 
         this.status.setProgressBarStep(this.geometryLightmapSize);
 
-        ExecutorService service = Executors.newFixedThreadPool(amountOfCores);
         List<Future<?>> tasks = new ArrayList<>(amountOfCores);
 
         this.status.timeStart = System.currentTimeMillis();
@@ -616,7 +619,7 @@ public class BakedLighting {
                 if (line >= this.geometryLightmapSize) {
                     break;
                 }
-                tasks.add(service.submit(() -> {
+                tasks.add(this.threads.submit(() -> {
                     processLine(line);
                 }));
             }
@@ -626,7 +629,6 @@ public class BakedLighting {
                     f.get();
                     this.status.stepProgressBar();
                 } catch (InterruptedException | ExecutionException ex) {
-                    service.shutdown();
                     throw new RuntimeException(ex);
                 }
             }
@@ -634,8 +636,6 @@ public class BakedLighting {
             tasks.clear();
         }
         this.status.rays = 0;
-
-        service.shutdown();
     }
 
     private static class SampleState {
@@ -698,7 +698,7 @@ public class BakedLighting {
         int i2 = -1;
 
         for (int x = 0; x < this.geometryLightmapSize; x++) {
-            for (int s = 0; s < this.scene.getSamplingMode().numSamples(); s++) {
+            for (int s = 0; s < this.samplingMode.numSamples(); s++) {
                 boolean filled = this.sampleBuffer.read(x, y, s);
                 if (!filled) {
                     continue;
@@ -825,11 +825,15 @@ public class BakedLighting {
         if (this.scene.isDirectLightingEnabled()) {
             processDirect(state, direct);
         }
+        
         if (this.scene.isShadowsEnabled()) {
             processShadow(state, shadow);
         }
-        if (this.scene.isIndirectLightingEnabled()) {
+        
+        if (this.scene.isIndirectLightingEnabled() && !this.fastMode) {
             processIndirect(state, indirect);
+        } else if (this.scene.isUseAmbientColorIfIndirectIsDisabled() || this.fastMode) {
+            indirect.output.set(this.scene.getSunAmbientColor());
         }
     }
 
@@ -850,17 +854,26 @@ public class BakedLighting {
                 .set(state.triangleNormal)
                 .mul(this.scene.getRayOffset())
                 .add(state.position);
-
+        
+        int rays = this.scene.getShadowRaysPerSample();
+        if (this.fastMode) {
+            rays = 1;
+        }
+        
         float shadowValue = 0f;
-        for (int i = 0; i < this.scene.getIndirectRaysPerSample(); i++) {
-            randomSunDirection(shadow.randomDirection, state.random);
+        for (int i = 0; i < rays; i++) {
+            if (this.fastMode) {
+                shadow.randomDirection.set(this.scene.getSunDirectionInverted());
+            } else {
+                randomSunDirection(shadow.randomDirection, state.random);
+            }
             if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection, this.scene.getGeometries())) {
                 shadowValue++;
             }
             this.status.rays++;
         }
-        shadowValue /= this.scene.getIndirectRaysPerSample();
-
+        shadowValue /= rays;
+        
         shadow.output = 1f - shadowValue;
     }
 
@@ -943,12 +956,15 @@ public class BakedLighting {
     }
 
     private void denoiseBuffers() {
-        int numSamples = this.scene.getSamplingMode().numSamples();
+        if (this.fastMode) {
+            return;
+        }
+        
+        int numSamples = this.samplingMode.numSamples();
         final ColorBuffer indirectOutput = new ColorBuffer(this.geometryLightmapSize, numSamples);
         final GrayBuffer reversedShadowOutput = new GrayBuffer(this.geometryLightmapSize, numSamples);
 
         int amountOfCores = Runtime.getRuntime().availableProcessors();
-        ExecutorService service = Executors.newFixedThreadPool(amountOfCores);
         List<Future<?>> tasks = new ArrayList<>(amountOfCores);
 
         this.status.setProgressBarStep(this.lightmapperQuads.length);
@@ -960,11 +976,11 @@ public class BakedLighting {
                 if (quad >= this.lightmapperQuads.length) {
                     break;
                 }
-                tasks.add(service.submit(() -> {
+                tasks.add(this.threads.submit(() -> {
                     denoiseQuad(indirectOutput, reversedShadowOutput, quad);
                 }));
             }
-            
+
             for (Future<?> f : tasks) {
                 try {
                     f.get();
@@ -973,7 +989,7 @@ public class BakedLighting {
                 }
                 this.status.stepProgressBar();
             }
-            
+
             tasks.clear();
         }
 
@@ -982,17 +998,17 @@ public class BakedLighting {
     }
 
     private void denoiseQuad(ColorBuffer indirectOutput, GrayBuffer reversedShadowOutput, int i) {
-        int numSamples = this.scene.getSamplingMode().numSamples();
+        int numSamples = this.samplingMode.numSamples();
 
         Vector3f color = new Vector3f();
 
         LightmapUVs.LightmapperQuad quad = this.lightmapperQuads[i];
-        
+
         int minX = clamp(quad.getX(), 0, this.geometryLightmapSize);
         int minY = clamp(quad.getY(), 0, this.geometryLightmapSize);
         int maxX = clamp(quad.getX() + quad.getWidth(), 0, this.geometryLightmapSize);
         int maxY = clamp(quad.getY() + quad.getHeight(), 0, this.geometryLightmapSize);
-        
+
         final int width = maxX - minX;
         final int height = maxY - minY;
         final int xOffset = minX;
@@ -1148,7 +1164,7 @@ public class BakedLighting {
     }
 
     private void combineBuffers() {
-        int numSamples = this.scene.getSamplingMode().numSamples();
+        int numSamples = this.samplingMode.numSamples();
 
         Vector3f currentColor = new Vector3f();
 
@@ -1159,7 +1175,7 @@ public class BakedLighting {
         this.status.setProgressBarStep(this.geometryLightmapSize);
         for (int y = 0; y < this.geometryLightmapSize; y++) {
             setStatusText("Combining Buffers (" + y + "/" + this.geometryLightmapSize + ")");
-            
+
             for (int x = 0; x < this.geometryLightmapSize; x++) {
                 int processedSamples = 0;
                 for (int s = 0; s < numSamples; s++) {
@@ -1201,7 +1217,7 @@ public class BakedLighting {
 
                     direct.add(indirect);
                 }
-                
+
                 this.resultBuffer.read(currentColor, x, y, 0);
                 currentColor.add(direct);
                 this.resultBuffer.write(currentColor, x, y, 0);
@@ -1212,11 +1228,81 @@ public class BakedLighting {
     }
 
     private void generateMargins() {
-        
+        int numberOfCores = Runtime.getRuntime().availableProcessors();
+        this.status.setProgressBarStep(this.lightmapperQuads.length);
+
+        List<Future<?>> tasks = new ArrayList<>();
+        for (int i = 0; i < this.lightmapperQuads.length; i += numberOfCores) {
+            setStatusText("Generating Margins ("+i+"/"+this.lightmapperQuads.length+")");
+            for (int j = 0; j < numberOfCores; j++) {
+                final int index = i + j;
+                if (index < this.lightmapperQuads.length) {
+                    tasks.add(this.threads.submit(() -> {
+                        generateMargin(this.lightmapperQuads[index]);
+                    }));
+                }
+            }
+            for (Future<?> task:tasks) {
+                try {
+                    task.get();
+                    this.status.stepProgressBar();
+                } catch (InterruptedException | ExecutionException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+            tasks.clear();
+        }
     }
-    
+
+    private void generateMargin(LightmapUVs.LightmapperQuad quad) {
+        MarginAutomata.MarginAutomataIO io = new MarginAutomata.MarginAutomataIO() {
+            final Vector3f vec = new Vector3f();
+
+            @Override
+            public int width() {
+                return quad.getWidth();
+            }
+
+            @Override
+            public int height() {
+                return quad.getHeight();
+            }
+
+            @Override
+            public boolean outOfBounds(int x, int y) {
+                return x < 0 || y < 0 || x >= width() || y >= height();
+            }
+
+            @Override
+            public boolean empty(int x, int y) {
+                for (int s = 0; s < BakedLighting.this.samplingMode.numSamples(); s++) {
+                    if (BakedLighting.this.sampleBuffer.read(quad.getX() + x, quad.getY() + y, s)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+
+            @Override
+            public void read(int x, int y, MarginAutomata.MarginAutomataColor color) {
+                BakedLighting.this.resultBuffer.read(this.vec, quad.getX() + x, quad.getY() + y, 0);
+                color.r = this.vec.x();
+                color.g = this.vec.y();
+                color.b = this.vec.z();
+            }
+
+            @Override
+            public void write(int x, int y, MarginAutomata.MarginAutomataColor color) {
+                this.vec.set(color.r, color.g, color.b);
+                BakedLighting.this.resultBuffer.write(this.vec, quad.getX() + x, quad.getY() + y, 0);
+            }
+        };
+
+        MarginAutomata.generateMargin(io, LightmapUVs.MARGIN * 10);
+    }
+
     private void output() {
-        byte[] lineColorData = new byte[this.geometryLightmapSize * 4];
+        byte[] lineColorData = new byte[this.geometryLightmapSize * 3];
 
         Vector3f color = new Vector3f();
 
@@ -1233,13 +1319,12 @@ public class BakedLighting {
                 gColor = Math.max(gColor, 0);
                 bColor = Math.max(bColor, 0);
 
-                lineColorData[(x * 4) + 0] = (byte) rColor;
-                lineColorData[(x * 4) + 1] = (byte) gColor;
-                lineColorData[(x * 4) + 2] = (byte) bColor;
-                lineColorData[(x * 4) + 3] = (byte) 0xFF;
+                lineColorData[(x * 3) + 0] = (byte) rColor;
+                lineColorData[(x * 3) + 1] = (byte) gColor;
+                lineColorData[(x * 3) + 2] = (byte) bColor;
             }
             this.outputBuffer.put(lineColorData);
-            
+
             this.status.stepProgressBar();
         }
         this.outputBuffer.rewind();
@@ -1248,26 +1333,26 @@ public class BakedLighting {
     private void createLightmapTexture() {
         setStatusText("Creating Texture (" + this.geometryLightmapSize + "x" + this.geometryLightmapSize + ")");
         this.status.currentProgress = 0f;
-        
+
         final ByteBuffer outputBufferCopy = this.outputBuffer;
         final Cleaner.Cleanable outputBufferCleanableCopy = this.outputBufferCleanable;
         final int lightmapSizeCopy = this.geometryLightmapSize;
         final Geometry geometryCopy = this.geometry;
         final MeshData.LightmapMesh lightmapMeshCopy = this.lightmap;
-        
+
         Main.MAIN_TASKS.add(() -> {
             int texture = glGenTextures();
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
-            
+
             this.status.memoryUsage += lightmapSizeCopy * lightmapSizeCopy * 3;
             glTexImage2D(
                     GL_TEXTURE_2D, 0,
                     GL_RGB8, lightmapSizeCopy, lightmapSizeCopy,
                     0,
-                    GL_RGBA, GL_UNSIGNED_BYTE, outputBufferCopy
+                    GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy
             );
-            
+
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
@@ -1278,7 +1363,7 @@ public class BakedLighting {
 
             geometryCopy.setLightmapTextureHint(texture);
             geometryCopy.setLightmapMesh(lightmapMeshCopy);
-            
+
             outputBufferCleanableCopy.clean();
         });
 
@@ -1286,19 +1371,23 @@ public class BakedLighting {
     }
 
     public void bake() {
-        loadTextures();
-        scheduleLightmaps();
-        waitForLightmaps();
-        waitForBVHs();
-        for (int i = 0; i < this.geometries.size(); i++) {
-            loadGeometry(i);
-            computeBuffers();
-            bakeLightmap();
-            denoiseBuffers();
-            combineBuffers();
-            generateMargins();
-            output();
-            createLightmapTexture();
+        try {
+            loadTextures();
+            scheduleLightmaps();
+            waitForLightmaps();
+            waitForBVHs();
+            for (int i = 0; i < this.geometries.size(); i++) {
+                loadGeometry(i);
+                computeBuffers();
+                bakeLightmap();
+                denoiseBuffers();
+                combineBuffers();
+                generateMargins();
+                output();
+                createLightmapTexture();
+            }
+        } finally {
+            this.threads.shutdownNow();
         }
     }
 

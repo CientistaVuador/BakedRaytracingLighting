@@ -223,7 +223,7 @@ public class LightmapUVs {
 
     private static final float TOLERANCE = 1f - (1f / 256f);
     private static final int VERTEX_SIZE = 3;
-    private static final int MARGIN = 1;
+    public static final int MARGIN = 1;
     private static final int OPTIMIZATION_TRIGGER = 1024;
 
     private final float[] vertices;

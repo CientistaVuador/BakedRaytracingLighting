@@ -111,12 +111,14 @@ public class Game {
                 .scale(0.10f);
 
         ciencola.setModel(matrix);
-
+        
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
         
-        this.scene.setSamplingMode(SamplingMode.SAMPLE_5);
+        this.scene.setFastModeEnabled(false);
+        
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
 
         /*float[] ciencolaVertices = Geometries.GARAGE[4].getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(

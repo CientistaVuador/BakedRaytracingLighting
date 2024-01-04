@@ -69,8 +69,84 @@ public class Main {
     public static final boolean SPIKE_LAG_WARNINGS = false;
     public static final int MIN_UNIFORM_BUFFER_BINDINGS = UBOBindingPoints.MIN_NUMBER_OF_UBO_BINDING_POINTS;
 
+    public static final int OPENGL_MAJOR_VERSION;
+    public static final int OPENGL_MINOR_VERSION;
+    public static final boolean COMPATIBLE_MODE;
+
     static {
         org.lwjgl.system.Configuration.LIBRARY_PATH.set("natives");
+
+        if (!glfwInit()) {
+            throw new IllegalStateException("Could not initialize GLFW!");
+        }
+
+        int[] supportedVersions = {
+            4, 6,
+            4, 5,
+            4, 4,
+            4, 3,
+            4, 2,
+            4, 1,
+            4, 0,
+            3, 3
+        };
+
+        glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+        
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+
+        long dummyWindow = NULL;
+        boolean compatible = true;
+
+        for (int v = 0; v < supportedVersions.length; v += 2) {
+            int major = supportedVersions[v + 0];
+            int minor = supportedVersions[v + 1];
+
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, major);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, minor);
+
+            dummyWindow = glfwCreateWindow(1, 1, "dummy window", NULL, NULL);
+
+            if (dummyWindow == NULL) {
+                continue;
+            }
+            break;
+        }
+
+        if (dummyWindow == NULL) {
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 1);
+            glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
+            dummyWindow = glfwCreateWindow(1, 1, "dummy window", NULL, NULL);
+            if (dummyWindow == NULL) {
+                throw new RuntimeException("OpenGL is not supported.");
+            }
+            System.out.println("WARNING: RUNNING ON INCOMPATIBLE HARDWARE! GAME MAY CRASH!");
+            compatible = false;
+        }
+        
+        COMPATIBLE_MODE = compatible;
+
+        glfwMakeContextCurrent(dummyWindow);
+        GL.createCapabilities();
+
+        OPENGL_MAJOR_VERSION = glGetInteger(GL_MAJOR_VERSION);
+        OPENGL_MINOR_VERSION = glGetInteger(GL_MINOR_VERSION);
+
+        System.out.println("Running on OpenGL " + OPENGL_MAJOR_VERSION + "." + OPENGL_MINOR_VERSION);
+        System.out.println("Vendor: " + glGetString(GL_VENDOR));
+        System.out.println("Renderer: " + glGetString(GL_RENDERER));
+        System.out.println("Version: " + glGetString(GL_VERSION));
+        System.out.println("GLSL Version: " + glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+        GL.setCapabilities(null);
+        glfwMakeContextCurrent(0);
+
+        glfwDestroyWindow(dummyWindow);
+
+        glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     }
 
     public static class OpenGLErrorException extends RuntimeException {
@@ -142,8 +218,7 @@ public class Main {
     public static final String WINDOW_ICON = "cientistavuador/bakedlighting/resources/image/window_icon.png";
     private static final int[] savedWindowStatus = new int[4];
     private static GLDebugMessageCallback DEBUG_CALLBACK = null;
-    
-    
+
     private static String debugSource(int source) {
         return switch (source) {
             case GL_DEBUG_SOURCE_API ->
@@ -210,21 +285,23 @@ public class Main {
             }
         });
 
-        if (!glfwInit()) {
-            throw new IllegalStateException("Could not initialize GLFW!");
-        }
-
         if (USE_MSAA) {
             glfwWindowHint(GLFW_SAMPLES, 16); //MSAA 16x
         }
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OPENGL_MAJOR_VERSION);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OPENGL_MINOR_VERSION);
+        
+        if (COMPATIBLE_MODE) {
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+        } else {
+            glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_ANY_PROFILE);
+            glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_FALSE);
+        }
 
         WINDOW_POINTER = glfwCreateWindow(Main.WIDTH, Main.HEIGHT, Main.WINDOW_TITLE, NULL, NULL);
         if (WINDOW_POINTER == NULL) {
-            throw new IllegalStateException("Could not create a OpenGL 3.3 Context Window! Update your drivers or buy a new GPU.");
+            throw new IllegalStateException("Found a compatible OpenGL version but now it's not compatible anymore.");
         }
         glfwMakeContextCurrent(WINDOW_POINTER);
 
@@ -359,6 +436,7 @@ public class Main {
         glClearStencil(0);
         glCullFace(GL_BACK);
         glLineWidth(1f);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         int maxUBOBindings = glGetInteger(GL_MAX_UNIFORM_BUFFER_BINDINGS);
         if (maxUBOBindings < MIN_UNIFORM_BUFFER_BINDINGS) {
             throw new IllegalStateException("Max UBO Bindings too small! Update your drivers or buy a new GPU.");
@@ -414,15 +492,15 @@ public class Main {
                         int[] windowY = {0};
                         int[] windowWidth = {0};
                         int[] windowHeight = {0};
-                        
+
                         glfwGetWindowPos(window, windowX, windowY);
                         glfwGetWindowSize(window, windowWidth, windowHeight);
-                        
+
                         Main.savedWindowStatus[0] = windowX[0];
                         Main.savedWindowStatus[1] = windowY[0];
                         Main.savedWindowStatus[2] = windowWidth[0];
                         Main.savedWindowStatus[3] = windowHeight[0];
-                        
+
                         glfwSetWindowMonitor(window, primary, 0, 0, mode.width(), mode.height(), mode.refreshRate());
                         Main.FULLSCREEN = true;
                     }

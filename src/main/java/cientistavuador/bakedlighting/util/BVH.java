@@ -175,11 +175,11 @@ public class BVH implements Aab {
                         closest = other;
                         closestDistance = distance;
                         closestIndex = j;
-                        
+
                         closestMinX = otherMinX;
                         closestMinY = otherMinY;
                         closestMinZ = otherMinZ;
-                        
+
                         closestMaxX = otherMaxX;
                         closestMaxY = otherMaxY;
                         closestMaxZ = otherMaxZ;
@@ -201,7 +201,7 @@ public class BVH implements Aab {
                 float newMaxX = Math.max(Math.max(minX, closestMinX), Math.max(maxX, closestMaxX));
                 float newMaxY = Math.max(Math.max(minY, closestMinY), Math.max(maxY, closestMaxY));
                 float newMaxZ = Math.max(Math.max(minZ, closestMinZ), Math.max(maxZ, closestMaxZ));
-                
+
                 BVH merge = new BVH(
                         vertices,
                         indices,
@@ -369,6 +369,76 @@ public class BVH implements Aab {
         return fastTestRay(a, b, c, tested, this, localOrigin, localDirection);
     }
 
+    private void testRay(
+            Vector3fc localOrigin, Vector3fc localDirection,
+            List<LocalRayResult> resultsOutput, BVH bvh, Set<Integer> tested,
+            Vector3f normal, Vector3f hitposition, Vector3f a, Vector3f b, Vector3f c
+    ) {
+        if (Intersectionf.testRayAab(localOrigin, localDirection, bvh.getMin(), bvh.getMax())) {
+            if (bvh.getLeft() == null && bvh.getRight() == null) {
+                int[] nodeTriangles = bvh.getTriangles();
+                for (int i = 0; i < nodeTriangles.length; i++) {
+                    int triangle = nodeTriangles[i];
+
+                    if (tested.contains(triangle)) {
+                        continue;
+                    }
+
+                    tested.add(triangle);
+
+                    int i0 = this.indices[(triangle * 3) + 0];
+                    int i1 = this.indices[(triangle * 3) + 1];
+                    int i2 = this.indices[(triangle * 3) + 2];
+
+                    int v0xyz = (i0 * this.vertexSize) + this.xyzOffset;
+                    int v1xyz = (i1 * this.vertexSize) + this.xyzOffset;
+                    int v2xyz = (i2 * this.vertexSize) + this.xyzOffset;
+
+                    a.set(
+                            this.vertices[v0xyz + 0],
+                            this.vertices[v0xyz + 1],
+                            this.vertices[v0xyz + 2]
+                    );
+                    b.set(
+                            this.vertices[v1xyz + 0],
+                            this.vertices[v1xyz + 1],
+                            this.vertices[v1xyz + 2]
+                    );
+                    c.set(
+                            this.vertices[v2xyz + 0],
+                            this.vertices[v2xyz + 1],
+                            this.vertices[v2xyz + 2]
+                    );
+
+                    float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
+                    if (hit >= 0f) {
+                        MeshUtils.calculateTriangleNormal(
+                                this.vertices,
+                                this.vertexSize,
+                                this.xyzOffset,
+                                i0,
+                                i1,
+                                i2,
+                                normal
+                        );
+                        boolean frontFace = normal.dot(localDirection) < 0f;
+
+                        hitposition.set(localDirection).mul(hit).add(localOrigin);
+
+                        resultsOutput.add(new LocalRayResult(localOrigin, localDirection, hitposition, normal, triangle, frontFace));
+                    }
+                }
+            }
+
+            if (bvh.getLeft() != null) {
+                testRay(localOrigin, localDirection, resultsOutput, bvh.getLeft(), tested, normal, hitposition, a, b, c);
+            }
+            if (bvh.getRight() != null) {
+                testRay(localOrigin, localDirection, resultsOutput, bvh.getRight(), tested, normal, hitposition, a, b, c);
+            }
+        }
+    }
+
     public List<LocalRayResult> testRay(Vector3fc localOrigin, Vector3fc localDirection) {
         List<LocalRayResult> resultsOutput = new ArrayList<>();
 
@@ -381,80 +451,7 @@ public class BVH implements Aab {
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
 
-        Queue<BVH> queue = new ArrayDeque<>();
-        List<BVH> next = new ArrayList<>();
-
-        queue.add(this);
-
-        do {
-            BVH e;
-            while ((e = queue.poll()) != null) {
-                if (Intersectionf.testRayAab(localOrigin, localDirection, e.getMin(), e.getMax())) {
-                    if (e.getLeft() == null && e.getRight() == null) {
-                        int[] nodeTriangles = e.getTriangles();
-                        for (int i = 0; i < nodeTriangles.length; i++) {
-                            int triangle = nodeTriangles[i];
-
-                            int i0 = this.indices[(triangle * 3) + 0];
-                            int i1 = this.indices[(triangle * 3) + 1];
-                            int i2 = this.indices[(triangle * 3) + 2];
-
-                            int v0xyz = (i0 * this.vertexSize) + this.xyzOffset;
-                            int v1xyz = (i1 * this.vertexSize) + this.xyzOffset;
-                            int v2xyz = (i2 * this.vertexSize) + this.xyzOffset;
-
-                            if (!tested.contains(triangle)) {
-                                tested.add(triangle);
-
-                                a.set(
-                                        this.vertices[v0xyz + 0],
-                                        this.vertices[v0xyz + 1],
-                                        this.vertices[v0xyz + 2]
-                                );
-                                b.set(
-                                        this.vertices[v1xyz + 0],
-                                        this.vertices[v1xyz + 1],
-                                        this.vertices[v1xyz + 2]
-                                );
-                                c.set(
-                                        this.vertices[v2xyz + 0],
-                                        this.vertices[v2xyz + 1],
-                                        this.vertices[v2xyz + 2]
-                                );
-
-                                float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
-                                if (hit >= 0f) {
-                                    MeshUtils.calculateTriangleNormal(
-                                            this.vertices,
-                                            this.vertexSize,
-                                            this.xyzOffset,
-                                            i0,
-                                            i1,
-                                            i2,
-                                            normal
-                                    );
-                                    boolean frontFace = normal.dot(localDirection) < 0f;
-
-                                    hitposition.set(localDirection).mul(hit).add(localOrigin);
-
-                                    resultsOutput.add(new LocalRayResult(localOrigin, localDirection, hitposition, normal, triangle, frontFace));
-                                }
-                            }
-                        }
-                        continue;
-                    }
-
-                    if (e.getLeft() != null) {
-                        next.add(e.getLeft());
-                    }
-                    if (e.getRight() != null) {
-                        next.add(e.getRight());
-                    }
-                }
-            }
-            queue.addAll(next);
-            next.clear();
-        } while (!queue.isEmpty());
+        testRay(localOrigin, localDirection, resultsOutput, this, tested, normal, hitposition, a, b, c);
 
         return resultsOutput;
     }
