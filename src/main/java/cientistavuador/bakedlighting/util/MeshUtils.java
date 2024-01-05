@@ -209,8 +209,29 @@ public class MeshUtils {
         return new Pair<>(unindexedVertices, unindexedIndices);
     }
     
-    public static LightmapUVGenerator.LightmapUVGeneratorOutput generateLightmapUV(float[] vertices, int vertexSize, int xyzOffset, int lightmapSize) {
-        return LightmapUVGenerator.generateLightmapUV(vertices, vertexSize, xyzOffset, lightmapSize);
+    public static LightmapUVs.GeneratorOutput generateLightmapUVs(float[] vertices, int vertexSize, int xyzOffset, float pixelToWorldRatio, float scaleX, float scaleY, float scaleZ) {
+        return LightmapUVs.generate(vertices, vertexSize, xyzOffset, pixelToWorldRatio, scaleX, scaleY, scaleZ);
+    }
+    
+    public static void calculateTriangleNormal(
+            float ax, float ay, float az,
+            float bx, float by, float bz,
+            float cx, float cy, float cz,
+            Vector3f outNormal
+    ) {
+        outNormal.set(bx, by, bz).sub(ax, ay, az).normalize();
+        
+        float baX = outNormal.x();
+        float baY = outNormal.y();
+        float baZ = outNormal.z();
+        
+        outNormal.set(cx, cy, cz).sub(ax, ay, az).normalize();
+        
+        float caX = outNormal.x();
+        float caY = outNormal.y();
+        float caZ = outNormal.z();
+        
+        outNormal.set(baX, baY, baZ).cross(caX, caY, caZ).normalize();
     }
     
     public static void calculateTriangleNormal(float[] vertices, int vertexSize, int xyzOffset, int i0, int i1, int i2, Vector3f outNormal) {
@@ -226,19 +247,7 @@ public class MeshUtils {
         float cy = vertices[(i2 * vertexSize) + xyzOffset + 1];
         float cz = vertices[(i2 * vertexSize) + xyzOffset + 2];
         
-        outNormal.set(bx, by, bz).sub(ax, ay, az).normalize();
-        
-        float baX = outNormal.x();
-        float baY = outNormal.y();
-        float baZ = outNormal.z();
-        
-        outNormal.set(cx, cy, cz).sub(ax, ay, az).normalize();
-        
-        float caX = outNormal.x();
-        float caY = outNormal.y();
-        float caZ = outNormal.z();
-        
-        outNormal.set(baX, baY, baZ).cross(caX, caY, caZ).normalize();
+        calculateTriangleNormal(ax, ay, az, bx, by, bz, cx, cy, cz, outNormal);
     }
     
     private MeshUtils() {

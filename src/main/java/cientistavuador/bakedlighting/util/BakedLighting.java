@@ -42,8 +42,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.joml.Matrix3f;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -69,7 +67,9 @@ public class BakedLighting {
 
         private long timeStart = 0;
         private volatile long rays = 0;
-
+        
+        private long progressBarStart = System.currentTimeMillis();
+        
         public Status() {
 
         }
@@ -77,6 +77,8 @@ public class BakedLighting {
         private void setProgressBarStep(float max) {
             this.currentProgress = 0f;
             this.progressBarStep = 100f / max;
+            
+            this.progressBarStart = System.currentTimeMillis();
         }
 
         private void stepProgressBar() {
@@ -178,7 +180,23 @@ public class BakedLighting {
             }
             return value;
         }
-
+        
+        public int getEstimatedTime() {
+            float speed = this.currentProgress / ((System.currentTimeMillis() - this.progressBarStart) / 1000f);
+            return (int) ((100f - this.currentProgress) / speed);
+        }
+        
+        public String getEstimatedTimeFormatted() {
+            int estimated = getEstimatedTime();
+            
+            int hours = estimated / 3600;
+            estimated -= hours * 3600;
+            int minutes = estimated / 60;
+            estimated -= minutes * 60;
+            int seconds = estimated;
+            
+            return hours+"h "+minutes+"m "+seconds+"s";
+        }
     }
 
     public static Status dummyStatus() {
@@ -443,7 +461,9 @@ public class BakedLighting {
             this.lightmaps[i] = geo.getMesh()
                     .scheduleLightmapMesh(
                             this.pixelToWorldRatio,
-                            scale.x(), scale.y(), scale.z()
+                            scale.x() * geo.getLightmapScale(),
+                            scale.y() * geo.getLightmapScale(),
+                            scale.z() * geo.getLightmapScale()
                     );
 
             this.status.stepProgressBar();
@@ -531,7 +551,9 @@ public class BakedLighting {
         Vector3f a = new Vector3f();
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
-
+        
+        Vector3f normal = new Vector3f();
+        
         this.status.setProgressBarStep(this.lightmapperQuads.length);
 
         for (int i = 0; i < this.lightmapperQuads.length; i++) {
@@ -553,11 +575,11 @@ public class BakedLighting {
 
                 float v2x = lightmapVertices[(((j * 3) + 2) * 2) + 0] + quad.getX();
                 float v2y = lightmapVertices[(((j * 3) + 2) * 2) + 1] + quad.getY();
-
+                
                 a.set(v0x, v0y, 0f);
                 b.set(v1x, v1y, 0f);
                 c.set(v2x, v2y, 0f);
-
+                
                 int minX = (int) Math.floor(Math.min(v0x, Math.min(v1x, v2x)));
                 int minY = (int) Math.floor(Math.min(v0y, Math.min(v1y, v2y)));
                 int maxX = (int) Math.ceil(Math.max(v0x, Math.max(v1x, v2x)));
@@ -569,7 +591,8 @@ public class BakedLighting {
                 maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
 
                 SamplingMode mode = this.samplingMode;
-
+                
+                raster:
                 for (int y = minY; y <= maxY; y++) {
                     for (int x = minX; x <= maxX; x++) {
                         for (int s = 0; s < mode.numSamples(); s++) {
@@ -583,11 +606,15 @@ public class BakedLighting {
                             float wx = weights.x();
                             float wy = weights.y();
                             float wz = weights.z();
-
+                            
+                            if (!Float.isFinite(wx) || !Float.isFinite(wy) || !Float.isFinite(wz)) {
+                                break raster;
+                            }
+                            
                             if (wx < 0f || wy < 0f || wz < 0f) {
                                 continue;
                             }
-
+                            
                             this.sampleBuffer.write(true, x, y, s);
                             this.trianglesBuffer.write(triangle, x, y, s);
                             this.quadsBuffer.write(i, x, y, s);
@@ -824,15 +851,19 @@ public class BakedLighting {
     ) {
         if (this.scene.isDirectLightingEnabled()) {
             processDirect(state, direct);
+        } else if (this.scene.fillEmptyValuesWithLightColors()) {
+            direct.output.set(this.scene.getSunDiffuseColor());
         }
         
         if (this.scene.isShadowsEnabled()) {
             processShadow(state, shadow);
+        } else if (this.scene.fillEmptyValuesWithLightColors()) {
+            shadow.output = 1f;
         }
         
         if (this.scene.isIndirectLightingEnabled() && !this.fastMode) {
             processIndirect(state, indirect);
-        } else if (this.scene.isUseAmbientColorIfIndirectIsDisabled() || this.fastMode) {
+        } else if (this.scene.fillEmptyValuesWithLightColors() || this.fastMode) {
             indirect.output.set(this.scene.getSunAmbientColor());
         }
     }

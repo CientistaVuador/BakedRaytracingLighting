@@ -44,7 +44,7 @@ public class Scene {
     private final Vector3f sunDirection = new Vector3f(0.5f, -1f, 1f).normalize();
     private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
     private final Vector3f sunDiffuseColor = new Vector3f(1.3f, 1.3f, 1.3f);
-    private final Vector3f sunAmbientColor = new Vector3f(0.4f, 0.4f, 0.5f);
+    private final Vector3f sunAmbientColor = new Vector3f(0.3f, 0.35f, 0.40f);
     
     private SamplingMode samplingMode = SamplingMode.SAMPLE_4;
     
@@ -55,7 +55,7 @@ public class Scene {
     private float shadowBlurArea = 1.5f;
     
     private boolean indirectLightingEnabled = true;
-    private boolean useAmbientColorIfIndirectIsDisabled = false;
+    private boolean fillEmptyValuesWithLightColors = false;
     private int indirectRaysPerSample = 8;
     private int indirectBounces = 4;
     private float indirectLightingBlurArea = 6f;
@@ -217,12 +217,12 @@ public class Scene {
         this.fastModeEnabled = fastModeEnabled;
     }
 
-    public void setUseAmbientColorIfIndirectIsDisabled(boolean useAmbientColorIfIndirectIsDisabled) {
-        this.useAmbientColorIfIndirectIsDisabled = useAmbientColorIfIndirectIsDisabled;
+    public void setFillEmptyValuesWithLightColors(boolean fillEmptyValuesWithLightColors) {
+        this.fillEmptyValuesWithLightColors = fillEmptyValuesWithLightColors;
     }
 
-    public boolean isUseAmbientColorIfIndirectIsDisabled() {
-        return useAmbientColorIfIndirectIsDisabled;
+    public boolean fillEmptyValuesWithLightColors() {
+        return fillEmptyValuesWithLightColors;
     }
     
 }

@@ -101,7 +101,8 @@ public class MeshData {
             this.scaleY = scaleY;
             this.scaleZ = scaleZ;
             this.futureLightmap = CompletableFuture.supplyAsync(() -> {
-                return LightmapUVs.generate(parent.getVertices(),
+                return MeshUtils.generateLightmapUVs(
+                        parent.getVertices(),
                         MeshData.SIZE,
                         MeshData.XYZ_OFFSET,
                         this.pixelToWorldRatio,

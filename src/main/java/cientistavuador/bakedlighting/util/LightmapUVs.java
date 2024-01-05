@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
+import org.joml.Vector4f;
 import org.joml.Vector4i;
 
 /**
@@ -225,6 +226,7 @@ public class LightmapUVs {
     private static final int VERTEX_SIZE = 3;
     public static final int MARGIN = 1;
     private static final int OPTIMIZATION_TRIGGER = 1024;
+    public static volatile boolean MAINTAIN_ROTATION = false;
 
     private final float[] vertices;
     private final float pixelToWorldRatio;
@@ -241,7 +243,8 @@ public class LightmapUVs {
     private int unoptimizedStartIndex = 0;
 
     private final List<LightmapperQuad> lightmapperQuads = new ArrayList<>();
-    
+    private final boolean maintainRotation;
+
     private LightmapUVs(float[] vertices, int vertexSize, int xyzOffset, float pixelToWorldRatio, float scaleX, float scaleY, float scaleZ) {
         this.vertices = new float[(vertices.length / vertexSize) * VERTEX_SIZE];
         for (int v = 0; v < vertices.length; v += vertexSize) {
@@ -252,6 +255,7 @@ public class LightmapUVs {
             this.vertices[(vertex * VERTEX_SIZE) + 2] = vertices[vxyz + 2] * scaleZ;
         }
         this.pixelToWorldRatio = pixelToWorldRatio;
+        this.maintainRotation = MAINTAIN_ROTATION;
     }
 
     private void mapVertices() {
@@ -273,7 +277,10 @@ public class LightmapUVs {
             if (this.processedTriangles.contains(triangle)) {
                 continue;
             }
-            this.faces.add(buildFace(triangle));
+            Face face = buildFace(triangle);
+            if (face != null) {
+                this.faces.add(face);
+            }
         }
     }
 
@@ -369,20 +376,24 @@ public class LightmapUVs {
     private Face buildFace(int triangle) {
         this.processedTriangles.add(triangle);
 
+        Vector3f outNormal = new Vector3f();
+        findNormal(triangle, outNormal);
+        float normalX = outNormal.x();
+        float normalY = outNormal.y();
+        float normalZ = outNormal.z();
+        
+        if (!outNormal.isFinite()) {
+            return null;
+        }
+        
+        Face face = new Face();
+        
         Set<Integer> ignoreSet = new HashSet<>();
         Vector4i edgeTriangle = new Vector4i();
 
         int[] triangles = new int[64];
         int trianglesIndex = 1;
         triangles[0] = triangle;
-
-        Face face = new Face();
-
-        Vector3f outNormal = new Vector3f();
-        findNormal(triangle, outNormal);
-        float normalX = outNormal.x();
-        float normalY = outNormal.y();
-        float normalZ = outNormal.z();
 
         long v0 = (((triangle * 3) + 0) * VERTEX_SIZE);
         long v1 = (((triangle * 3) + 1) * VERTEX_SIZE);
@@ -410,7 +421,7 @@ public class LightmapUVs {
                     }
 
                     findNormal(edgeTriangle.w(), outNormal);
-                    if (outNormal.dot(normalX, normalY, normalZ) >= TOLERANCE) {
+                    if (outNormal.isFinite() && outNormal.dot(normalX, normalY, normalZ) >= TOLERANCE) {
                         break;
                     }
 
@@ -461,6 +472,60 @@ public class LightmapUVs {
         for (Face face : this.faces) {
             generateFaceUVs(face);
         }
+    }
+
+    private void findMinMax(float[] uvs, Vector4f output) {
+        float minX = Float.POSITIVE_INFINITY;
+        float minY = Float.POSITIVE_INFINITY;
+        float maxX = Float.NEGATIVE_INFINITY;
+        float maxY = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i < uvs.length; i += 2) {
+            float x = uvs[i + 0];
+            float y = uvs[i + 1];
+
+            minX = Math.min(x, minX);
+            minY = Math.min(y, minY);
+
+            maxX = Math.max(x, maxX);
+            maxY = Math.max(y, maxY);
+        }
+        output.set(minX, minY, maxX, maxY);
+    }
+
+    private void rotate(float[] uvs, float angle) {
+        float angleRadians = (float) Math.toRadians(angle);
+        Vector3f vec = new Vector3f();
+        for (int i = 0; i < uvs.length; i += 2) {
+            float x = uvs[i + 0];
+            float y = uvs[i + 1];
+
+            vec.set(x, y, 0f).rotateZ(angleRadians);
+
+            uvs[i + 0] = vec.x();
+            uvs[i + 1] = vec.y();
+        }
+    }
+
+    private void findBestRotation(float[] uvs, Vector4f minMaxOutput) {
+        float bestRotation = 0f;
+        findMinMax(uvs, minMaxOutput);
+        float bestSmallerArea = (minMaxOutput.z() - minMaxOutput.x()) * (minMaxOutput.w() - minMaxOutput.y());
+
+        float[] clone = uvs.clone();
+        for (int i = 0; i < 89; i++) {
+            rotate(clone, 1f);
+            findMinMax(clone, minMaxOutput);
+
+            float area = (minMaxOutput.z() - minMaxOutput.x()) * (minMaxOutput.w() - minMaxOutput.y());
+
+            if (area < bestSmallerArea) {
+                bestRotation = i + 1f;
+                bestSmallerArea = area;
+            }
+        }
+
+        rotate(uvs, bestRotation);
+        findMinMax(uvs, minMaxOutput);
     }
 
     private void generateFaceUVs(Face face) {
@@ -543,6 +608,23 @@ public class LightmapUVs {
             minY = Math.min(Math.min(uv0y, uv1y), Math.min(uv2y, minY));
             maxX = Math.max(Math.max(uv0x, uv1x), Math.max(uv2x, maxX));
             maxY = Math.max(Math.max(uv0y, uv1y), Math.max(uv2y, maxY));
+        }
+
+        if (!this.maintainRotation) {
+            for (int v = 0; v < uvs.length; v += 2) {
+                int vx = v + 0;
+                int vy = v + 1;
+                uvs[vx] = (uvs[vx] - ((minX * 0.5f) + (maxX * 0.5f)));
+                uvs[vy] = (uvs[vy] - ((minY * 0.5f) + (maxY * 0.5f)));
+            }
+
+            Vector4f minMax = new Vector4f();
+            findBestRotation(uvs, minMax);
+
+            minX = minMax.x();
+            minY = minMax.y();
+            maxX = minMax.z();
+            maxY = minMax.w();
         }
 
         for (int v = 0; v < uvs.length; v += 2) {
@@ -925,11 +1007,11 @@ public class LightmapUVs {
     private void rotateUVsAndQuads() {
         for (Quad q : this.addedQuads) {
             float[] uvs = q.face.uvs;
-            
+
             for (int v = 0; v < uvs.length; v += 2) {
                 float x;
                 float y;
-                
+
                 if (!q.rotate90) {
                     x = uvs[v + 0];
                     y = uvs[v + 1];
@@ -937,18 +1019,18 @@ public class LightmapUVs {
                     x = uvs[v + 1];
                     y = uvs[v + 0];
                 }
-                
+
                 uvs[v + 0] = x;
                 uvs[v + 1] = y;
             }
-            
+
             if (q.rotate90) {
                 int width = q.width;
                 int height = q.height;
                 q.width = height;
                 q.height = width;
             }
-            
+
             q.rotate90 = false;
         }
     }
@@ -959,55 +1041,55 @@ public class LightmapUVs {
             int y = q.y;
             int width = q.width;
             int height = q.height;
-            
+
             this.lightmapperQuads.add(new LightmapperQuad(
                     x, y, width, height,
                     q.face.triangles, q.face.uvs
             ));
         }
     }
-    
+
     private GeneratorOutput output() {
         int lightmapSize = 0;
-        for (LightmapperQuad q:this.lightmapperQuads) {
+        for (LightmapperQuad q : this.lightmapperQuads) {
             lightmapSize = Math.max(lightmapSize, Math.max(q.x + q.width, q.y + q.height));
         }
-        
+
         float[] uvs = new float[(this.vertices.length / VERTEX_SIZE) * 2];
-        
+
         float invLightmapSize = 1f / lightmapSize;
-        for (LightmapperQuad q:this.lightmapperQuads) {
+        for (LightmapperQuad q : this.lightmapperQuads) {
             for (int i = 0; i < q.triangles.length; i++) {
                 int localv0 = ((i * 3) + 0) * 2;
                 int localv1 = ((i * 3) + 1) * 2;
                 int localv2 = ((i * 3) + 2) * 2;
-                
+
                 float localv0x = q.uvs[localv0 + 0];
                 float localv0y = q.uvs[localv0 + 1];
-                
+
                 float localv1x = q.uvs[localv1 + 0];
                 float localv1y = q.uvs[localv1 + 1];
-                
+
                 float localv2x = q.uvs[localv2 + 0];
                 float localv2y = q.uvs[localv2 + 1];
-                
+
                 int globalTriangle = q.triangles[i];
-                
+
                 int globalv0 = ((globalTriangle * 3) + 0) * 2;
                 int globalv1 = ((globalTriangle * 3) + 1) * 2;
                 int globalv2 = ((globalTriangle * 3) + 2) * 2;
-                
+
                 uvs[globalv0 + 0] = (localv0x + q.x) * invLightmapSize;
                 uvs[globalv0 + 1] = (localv0y + q.y) * invLightmapSize;
-                
+
                 uvs[globalv1 + 0] = (localv1x + q.x) * invLightmapSize;
                 uvs[globalv1 + 1] = (localv1y + q.y) * invLightmapSize;
-                
+
                 uvs[globalv2 + 0] = (localv2x + q.x) * invLightmapSize;
                 uvs[globalv2 + 1] = (localv2y + q.y) * invLightmapSize;
             }
         }
-        
+
         return new GeneratorOutput(
                 lightmapSize,
                 uvs,

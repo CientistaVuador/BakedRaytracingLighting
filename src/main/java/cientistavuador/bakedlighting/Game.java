@@ -45,6 +45,9 @@ import cientistavuador.bakedlighting.util.LightmapUVs;
 import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -90,9 +93,12 @@ public class Game {
         program.setLightingEnabled(true);
         glUseProgram(0);
 
-        for (int i = 0; i < Geometries.GARAGE.length; i++) {
+        for (int i = 0; i < Geometries.GARAGE.length - 1; i++) {
             this.scene.getGeometries().add(new Geometry(Geometries.GARAGE[i]));
         }
+        Geometry monkey = new Geometry(Geometries.GARAGE[4]);
+        this.scene.getGeometries().add(monkey);
+
         Geometry ciencola = new Geometry(Geometries.CIENCOLA);
         this.scene.getGeometries().add(ciencola);
 
@@ -116,48 +122,50 @@ public class Game {
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
         
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
+        
         this.scene.setFastModeEnabled(false);
         
-        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
-
-        /*float[] ciencolaVertices = Geometries.GARAGE[4].getVertices();
+        /*float[] ciencolaVertices = e.getMesh().getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
         ciencolaVertices,
         MeshData.SIZE,
         MeshData.XYZ_OFFSET,
-        null,
-        1f / 0.05f
-        );*/
+        1f / 0.5f,
+        1f,
+        1f,
+        1f
+        );
         
-        //System.out.println("Lightmap Size: "+output.getLightmapSize());
+        System.out.println("Lightmap Size: " + output.getLightmapSize());
         
-        //float[] uvs = output.getUVs();
+        float[] uvs = output.getUVs();
         
-        //try {
-            //BufferedWriter out = new BufferedWriter(new FileWriter("saida.obj"));
-            //for (int v = 0; v < uvs.length; v += (3 * 2)) {
-                //float u0 = uvs[v + 0];
-                //float v0 = uvs[v + 1];
-
-                //float u1 = uvs[v + 2];
-                //float v1 = uvs[v + 3];
-
-                //float u2 = uvs[v + 4];
-                //float v2 = uvs[v + 5];
-                
-                //out.write("v " + u0 + " " + v0);
-                //out.newLine();
-                //out.write("v " + u1 + " " + v1);
-                //out.newLine();
-                //out.write("v " + u2 + " " + v2);
-                //out.newLine();
-                //out.write("f " + ((v / 2) + 1) + " " + ((v / 2) + 2) + " " + ((v / 2) + 3));
-                //out.newLine();
-           // }
-            //out.close();
-        //} catch (IOException ex) {
-        //    ex.printStackTrace(System.out);
-        //}
+        try {
+        BufferedWriter out = new BufferedWriter(new FileWriter("saida.obj"));
+        for (int v = 0; v < uvs.length; v += (3 * 2)) {
+        float u0 = uvs[v + 0];
+        float v0 = uvs[v + 1];
+        
+        float u1 = uvs[v + 2];
+        float v1 = uvs[v + 3];
+        
+        float u2 = uvs[v + 4];
+        float v2 = uvs[v + 5];
+        
+        out.write("v " + u0 + " " + v0);
+        out.newLine();
+        out.write("v " + u1 + " " + v1);
+        out.newLine();
+        out.write("v " + u2 + " " + v2);
+        out.newLine();
+        out.write("f " + ((v / 2) + 1) + " " + ((v / 2) + 2) + " " + ((v / 2) + 3));
+        out.newLine();
+        }
+        out.close();
+        } catch (IOException ex) {
+        ex.printStackTrace(System.out);
+        }*/
     }
 
     public void loop() {
@@ -193,7 +201,7 @@ public class Game {
 
             MeshData mesh = geo.getMesh();
             MeshData.LightmapMesh lightmap = geo.getLightmapMesh();
-            
+
             if (lightmap == null || !lightmap.isDone()) {
                 glBindVertexArray(mesh.getVAO());
             } else {
@@ -215,6 +223,7 @@ public class Game {
             .append(this.status.getRaysPerSecondFormatted()).append('\n')
             .append("Video Memory Used By Lightmaps: ").append(this.status.getMemoryUsageFormatted()).append('\n')
             .append("FPS: ").append(Main.FPS).append('\n')
+            .append("Estimated Time: ").append(this.status.getEstimatedTimeFormatted()).append("\n")
             .toString()
         };
         GLFontRenderer.render(-0.895f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
@@ -278,11 +287,11 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1f / 0.05f);
+                this.status = BakedLighting.bake(this.scene, 1f / 0.1f);
             }
         }
     }
-    
+
     public void mouseCallback(long window, int button, int action, int mods) {
 
     }

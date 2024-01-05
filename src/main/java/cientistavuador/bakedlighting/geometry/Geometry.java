@@ -100,6 +100,8 @@ public class Geometry {
     private int lightmapTextureHint = Textures.EMPTY_LIGHTMAP_TEXTURE;
     private MeshData.LightmapMesh lightmapMesh = null;
     
+    private float lightmapScale = 1f;
+    
     public Geometry(MeshData mesh) {
         this.mesh = mesh;
     }
@@ -145,6 +147,14 @@ public class Geometry {
 
     public void setLightmapMesh(MeshData.LightmapMesh lightmapMesh) {
         this.lightmapMesh = lightmapMesh;
+    }
+
+    public float getLightmapScale() {
+        return lightmapScale;
+    }
+
+    public void setLightmapScale(float lightmapScale) {
+        this.lightmapScale = lightmapScale;
     }
     
 }
