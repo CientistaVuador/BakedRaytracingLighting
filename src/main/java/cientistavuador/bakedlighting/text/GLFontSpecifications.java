@@ -34,8 +34,8 @@ public class GLFontSpecifications {
     
     public static final GLFontSpecification ROBOTO_THIN_0_05_WHITE = new GLFontSpecification(GLFonts.ROBOTO_BOLD, 0.05f, GLFontSpecification.THIN, 1f, 1f, 1f, 1f);
     public static final GLFontSpecification OPENSANS_ITALIC_0_10_BANANA_YELLOW = new GLFontSpecification(GLFonts.OPENSANS_LIGHT_ITALIC, 0.10f, GLFontSpecification.NORMAL, 255f / 255f, 216f / 255f, 50f / 255f, 1f);
-    public static final GLFontSpecification SPACE_MONO_REGULAR_0_04_WHITE = new GLFontSpecification(GLFonts.SPACE_MONO_REGULAR, 0.04f, GLFontSpecification.BOLD, 1f, 1f, 1f, 1f);
-    public static final GLFontSpecification SPACE_MONO_REGULAR_0_04_BLACK = SPACE_MONO_REGULAR_0_04_WHITE.withColor(0f, 0f, 0f, 1f);
+    public static final GLFontSpecification SPACE_MONO_REGULAR_0_035_WHITE = new GLFontSpecification(GLFonts.SPACE_MONO_REGULAR, 0.035f, GLFontSpecification.BOLD, 1f, 1f, 1f, 1f);
+    public static final GLFontSpecification SPACE_MONO_REGULAR_0_035_BLACK = SPACE_MONO_REGULAR_0_035_WHITE.withColor(0f, 0f, 0f, 1f);
     
     private GLFontSpecifications() {
         

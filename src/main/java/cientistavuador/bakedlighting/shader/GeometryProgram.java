@@ -260,10 +260,12 @@ public class GeometryProgram {
                 
                 vec4 lightmapColor = texture(lightmap, lightmapUv);
                 vec4 textureColor = texture(tex, uv);
-                colorOutput = textureColor * color * lightmapColor;
+                
+                textureColor = vec4(pow(textureColor.rgb * color.rgb, vec3(gamma)), textureColor.a * color.a);
+                colorOutput = vec4(pow(textureColor.rgb * lightmapColor.rgb, vec3(1.0/gamma)), textureColor.a);
+                
                 if (lightingEnabled) {
-                    textureColor.rgb = pow(textureColor.rgb * color.rgb, vec3(gamma));
-                    vec3 resultOutput = vec3(0.0);
+                    vec3 resultOutput = textureColor.rgb * lightmapColor.rgb;
                     
                     //sun
                     resultOutput += sunDiffuse * max(dot(normal, -sunDirection), 0.0) * textureColor.rgb;
@@ -282,7 +284,7 @@ public class GeometryProgram {
                         }
                     }
                     
-                    colorOutput = vec4(pow(resultOutput, vec3(1.0/gamma)) * lightmapColor.rgb, textureColor.a * color.a * lightmapColor.a);
+                    colorOutput = vec4(pow(resultOutput, vec3(1.0/gamma)), textureColor.a);
                 }
             }
             """,

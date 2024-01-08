@@ -30,7 +30,7 @@ import cientistavuador.bakedlighting.Main;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import java.lang.ref.Cleaner;
-import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.Formatter;
 import java.util.HashMap;
@@ -395,7 +395,7 @@ public class BakedLighting {
 
     private ColorBuffer resultBuffer = null;
 
-    private ByteBuffer outputBuffer = null;
+    private FloatBuffer outputBuffer = null;
     private Cleaner.Cleanable outputBufferCleanable = null;
 
     private BakedLighting(Scene scene, float pixelToWorldRatio, Status status) {
@@ -517,7 +517,7 @@ public class BakedLighting {
         this.directColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
         this.reverseShadowBuffer = new GrayBuffer(this.geometryLightmapSize, numSamples);
         this.resultBuffer = new ColorBuffer(this.geometryLightmapSize, 1);
-        final ByteBuffer output = MemoryUtil.memCalloc(this.geometryLightmapSize * this.geometryLightmapSize * 3);
+        final FloatBuffer output = MemoryUtil.memCallocFloat(this.geometryLightmapSize * this.geometryLightmapSize * 3);
         this.outputBufferCleanable = ObjectCleaner.get().register(output, () -> {
             MemoryUtil.memFree(output);
         });
@@ -551,8 +551,6 @@ public class BakedLighting {
         Vector3f a = new Vector3f();
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
-        
-        Vector3f normal = new Vector3f();
         
         this.status.setProgressBarStep(this.lightmapperQuads.length);
 
@@ -874,7 +872,8 @@ public class BakedLighting {
     ) {
         direct.output
                 .set(this.scene.getSunDiffuseColor())
-                .mul(Math.max(state.normal.dot(this.scene.getSunDirectionInverted()), 0f));
+                .mul(Math.max(state.normal.dot(this.scene.getSunDirectionInverted()), 0f))
+                ;
     }
 
     private void processShadow(
@@ -954,6 +953,11 @@ public class BakedLighting {
 
                 SoftwareTexture rayTexture = this.sceneTextures.get(closestRay.getGeometry().getMesh().getTextureHint());
                 rayTexture.sampleNearest(u, v, indirect.bounceColor, 0);
+                
+                indirect.bounceColor[0] = (float) Math.pow(indirect.bounceColor[0], 2.2);
+                indirect.bounceColor[1] = (float) Math.pow(indirect.bounceColor[1], 2.2);
+                indirect.bounceColor[2] = (float) Math.pow(indirect.bounceColor[2], 2.2);
+                
                 indirect.bounceColors[bounceCount].set(indirect.bounceColor);
                 bounceCount++;
 
@@ -1333,26 +1337,19 @@ public class BakedLighting {
     }
 
     private void output() {
-        byte[] lineColorData = new byte[this.geometryLightmapSize * 3];
+        float[] lineColorData = new float[this.geometryLightmapSize * 3];
 
         Vector3f color = new Vector3f();
-
+        
         this.status.setProgressBarStep(this.geometryLightmapSize);
         for (int y = 0; y < this.geometryLightmapSize; y++) {
             setStatusText("Writing to Output Buffer (" + y + "/" + this.geometryLightmapSize + ")");
             for (int x = 0; x < this.geometryLightmapSize; x++) {
                 this.resultBuffer.read(color, x, y, 0);
-
-                int rColor = Math.min((int) (color.x() * 255f), 255);
-                int gColor = Math.min((int) (color.y() * 255f), 255);
-                int bColor = Math.min((int) (color.z() * 255f), 255);
-                rColor = Math.max(rColor, 0);
-                gColor = Math.max(gColor, 0);
-                bColor = Math.max(bColor, 0);
-
-                lineColorData[(x * 3) + 0] = (byte) rColor;
-                lineColorData[(x * 3) + 1] = (byte) gColor;
-                lineColorData[(x * 3) + 2] = (byte) bColor;
+                
+                lineColorData[(x * 3) + 0] = color.x();
+                lineColorData[(x * 3) + 1] = color.y();
+                lineColorData[(x * 3) + 2] = color.z();
             }
             this.outputBuffer.put(lineColorData);
 
@@ -1365,7 +1362,7 @@ public class BakedLighting {
         setStatusText("Creating Texture (" + this.geometryLightmapSize + "x" + this.geometryLightmapSize + ")");
         this.status.currentProgress = 0f;
 
-        final ByteBuffer outputBufferCopy = this.outputBuffer;
+        final FloatBuffer outputBufferCopy = this.outputBuffer;
         final Cleaner.Cleanable outputBufferCleanableCopy = this.outputBufferCleanable;
         final int lightmapSizeCopy = this.geometryLightmapSize;
         final Geometry geometryCopy = this.geometry;
@@ -1376,12 +1373,12 @@ public class BakedLighting {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, texture);
 
-            this.status.memoryUsage += lightmapSizeCopy * lightmapSizeCopy * 3;
+            this.status.memoryUsage += lightmapSizeCopy * lightmapSizeCopy * 4;
             glTexImage2D(
                     GL_TEXTURE_2D, 0,
-                    GL_RGB8, lightmapSizeCopy, lightmapSizeCopy,
+                    GL_RGB9_E5, lightmapSizeCopy, lightmapSizeCopy,
                     0,
-                    GL_RGB, GL_UNSIGNED_BYTE, outputBufferCopy
+                    GL_RGB, GL_FLOAT, outputBufferCopy
             );
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

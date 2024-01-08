@@ -46,11 +46,15 @@ public class Geometries {
         MeshData grass = meshes.get("garage.obj.gz@grass");
         MeshData red = meshes.get("garage.obj.gz@red");
         MeshData monkey = meshes.get("garage.obj.gz@monkey");
+        MeshData torus = meshes.get("garage.obj.gz@torus");
+        MeshData sphere = meshes.get("garage.obj.gz@sphere");
         bricks.setTextureHint(Textures.BRICKS);
         concrete.setTextureHint(Textures.CONCRETE);
         grass.setTextureHint(Textures.GRASS);
         red.setTextureHint(Textures.RED);
-        GARAGE = new MeshData[] {concrete, grass, bricks, red, monkey};
+        torus.setTextureHint(Textures.CONCRETE);
+        sphere.setTextureHint(Textures.RED);
+        GARAGE = new MeshData[] {concrete, grass, bricks, red, torus, sphere, monkey};
         
         MeshData ciencola = meshes.get("ciencola.obj");
         ciencola.setTextureHint(Textures.CIENCOLA);

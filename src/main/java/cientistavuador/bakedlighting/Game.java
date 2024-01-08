@@ -41,16 +41,14 @@ import cientistavuador.bakedlighting.texture.Textures;
 import cientistavuador.bakedlighting.ubo.CameraUBO;
 import cientistavuador.bakedlighting.ubo.UBOBindingPoints;
 import cientistavuador.bakedlighting.util.BakedLighting;
-import cientistavuador.bakedlighting.util.LightmapUVs;
 import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -96,7 +94,7 @@ public class Game {
         for (int i = 0; i < Geometries.GARAGE.length - 1; i++) {
             this.scene.getGeometries().add(new Geometry(Geometries.GARAGE[i]));
         }
-        Geometry monkey = new Geometry(Geometries.GARAGE[4]);
+        Geometry monkey = new Geometry(Geometries.GARAGE[Geometries.GARAGE.length - 1]);
         this.scene.getGeometries().add(monkey);
 
         Geometry ciencola = new Geometry(Geometries.CIENCOLA);
@@ -110,7 +108,7 @@ public class Game {
 
         ciencola = new Geometry(Geometries.CIENCOLA);
         this.scene.getGeometries().add(ciencola);
-
+        
         matrix = new Matrix4f()
                 .translate(0f, 0.595f, -5f)
                 .scale(1f, 1.2f, 1f)
@@ -122,9 +120,13 @@ public class Game {
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
         
+        this.scene.setIndirectLightingBlurArea(4f);
+        this.scene.setShadowBlurArea(1f);
+        
         this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
         
         this.scene.setFastModeEnabled(false);
+        
         
         /*float[] ciencolaVertices = e.getMesh().getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
@@ -169,6 +171,14 @@ public class Game {
     }
 
     public void loop() {
+        if (!this.status.isDone()) {
+            try {
+                Thread.sleep(16);
+            } catch (InterruptedException ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        
         for (RayResult r : this.rays) {
             LineRender.queueRender(r.getOrigin(), r.getHitPosition());
         }
@@ -226,8 +236,8 @@ public class Game {
             .append("Estimated Time: ").append(this.status.getEstimatedTimeFormatted()).append("\n")
             .toString()
         };
-        GLFontRenderer.render(-0.895f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_BLACK}, text);
-        GLFontRenderer.render(-0.90f, -0.60f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_04_WHITE}, text);
+        GLFontRenderer.render(-0.895f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_035_BLACK}, text);
+        GLFontRenderer.render(-0.90f, -0.60f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_035_WHITE}, text);
 
         Main.WINDOW_TITLE += " (DrawCalls: " + Main.NUMBER_OF_DRAWCALLS + ", Vertices: " + Main.NUMBER_OF_VERTICES + ")";
         Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
@@ -287,7 +297,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1f / 0.1f);
+                this.status = BakedLighting.bake(this.scene, 1f / 0.125f);
             }
         }
     }

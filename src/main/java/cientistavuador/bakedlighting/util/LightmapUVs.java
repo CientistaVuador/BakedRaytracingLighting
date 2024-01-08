@@ -222,7 +222,7 @@ public class LightmapUVs {
         public Quad value;
     }
 
-    private static final float TOLERANCE = 1f - (1f / 256f);
+    private static final float EPSILON = 1f - (1f / 256f);
     private static final int VERTEX_SIZE = 3;
     public static final int MARGIN = 1;
     private static final int OPTIMIZATION_TRIGGER = 1024;
@@ -421,7 +421,7 @@ public class LightmapUVs {
                     }
 
                     findNormal(edgeTriangle.w(), outNormal);
-                    if (outNormal.isFinite() && outNormal.dot(normalX, normalY, normalZ) >= TOLERANCE) {
+                    if (outNormal.isFinite() && outNormal.dot(normalX, normalY, normalZ) >= EPSILON) {
                         break;
                     }
 
@@ -533,7 +533,7 @@ public class LightmapUVs {
         float upY = 1f;
         float upZ = 0f;
 
-        if (Math.abs(face.normal.dot(upX, upY, upZ)) >= TOLERANCE) {
+        if (Math.abs(face.normal.dot(upX, upY, upZ)) >= EPSILON) {
             upY = 0f;
             upX = 1f;
         }
