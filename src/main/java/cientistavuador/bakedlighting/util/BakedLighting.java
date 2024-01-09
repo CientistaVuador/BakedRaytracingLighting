@@ -67,9 +67,9 @@ public class BakedLighting {
 
         private long timeStart = 0;
         private volatile long rays = 0;
-        
+
         private long progressBarStart = System.currentTimeMillis();
-        
+
         public Status() {
 
         }
@@ -77,7 +77,7 @@ public class BakedLighting {
         private void setProgressBarStep(float max) {
             this.currentProgress = 0f;
             this.progressBarStep = 100f / max;
-            
+
             this.progressBarStart = System.currentTimeMillis();
         }
 
@@ -180,22 +180,22 @@ public class BakedLighting {
             }
             return value;
         }
-        
+
         public int getEstimatedTime() {
             float speed = this.currentProgress / ((System.currentTimeMillis() - this.progressBarStart) / 1000f);
             return (int) ((100f - this.currentProgress) / speed);
         }
-        
+
         public String getEstimatedTimeFormatted() {
             int estimated = getEstimatedTime();
-            
+
             int hours = estimated / 3600;
             estimated -= hours * 3600;
             int minutes = estimated / 60;
             estimated -= minutes * 60;
             int seconds = estimated;
-            
-            return hours+"h "+minutes+"m "+seconds+"s";
+
+            return hours + "h " + minutes + "m " + seconds + "s";
         }
     }
 
@@ -366,6 +366,7 @@ public class BakedLighting {
 
     private final Scene scene;
     private final List<Geometry> geometries;
+    private final List<Scene.Light> lights;
     private final SamplingMode samplingMode;
     private final boolean fastMode;
     private final float pixelToWorldRatio;
@@ -389,6 +390,14 @@ public class BakedLighting {
     private IntegerDataBuffer quadsBuffer = null;
     private WeightsBuffer weightsBuffer = null;
 
+    private int currentLightIndex = 0;
+    private Scene.Light currentLight = null;
+
+    private int lightType = 0;
+
+    private Scene.DirectionalLight sun = null;
+    private Scene.PointLight point = null;
+
     private ColorBuffer indirectColorBuffer = null;
     private ColorBuffer directColorBuffer = null;
     private GrayBuffer reverseShadowBuffer = null;
@@ -401,6 +410,7 @@ public class BakedLighting {
     private BakedLighting(Scene scene, float pixelToWorldRatio, Status status) {
         this.scene = scene;
         this.geometries = scene.getGeometries();
+        this.lights = scene.getLights();
         this.pixelToWorldRatio = pixelToWorldRatio;
         this.status = status;
         this.samplingMode = scene.getSamplingMode();
@@ -409,7 +419,7 @@ public class BakedLighting {
 
     private void setStatusText(String s) {
         if (this.geometry != null) {
-            s = "(" + this.geometryIndex + "/" + this.geometries.size() + ") [" + this.geometry.getMesh().getName() + "] " + s;
+            s = "(" + this.geometryIndex + "/" + this.geometries.size() + ") (" + this.currentLightIndex + "/" + this.lights.size() + ") [" + this.geometry.getMesh().getName() + "] " + s;
         }
         this.status.currentStatus = s;
     }
@@ -513,9 +523,6 @@ public class BakedLighting {
         this.trianglesBuffer = new IntegerDataBuffer(this.geometryLightmapSize, numSamples);
         this.quadsBuffer = new IntegerDataBuffer(this.geometryLightmapSize, numSamples);
         this.weightsBuffer = new WeightsBuffer(this.geometryLightmapSize, numSamples);
-        this.indirectColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
-        this.directColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
-        this.reverseShadowBuffer = new GrayBuffer(this.geometryLightmapSize, numSamples);
         this.resultBuffer = new ColorBuffer(this.geometryLightmapSize, 1);
         final FloatBuffer output = MemoryUtil.memCallocFloat(this.geometryLightmapSize * this.geometryLightmapSize * 3);
         this.outputBufferCleanable = ObjectCleaner.get().register(output, () -> {
@@ -524,6 +531,29 @@ public class BakedLighting {
         this.outputBuffer = output;
 
         this.status.currentProgress = 100f;
+    }
+
+    private void loadLight(int index) {
+        this.currentLight = this.lights.get(index);
+        this.currentLightIndex = index;
+
+        if (this.currentLight instanceof Scene.DirectionalLight s) {
+            this.sun = s;
+            this.point = null;
+            this.lightType = 0;
+        } else if (this.currentLight instanceof Scene.PointLight p) {
+            this.sun = null;
+            this.point = p;
+            this.lightType = 1;
+        } else {
+            throw new RuntimeException("Unsupported Light Type: " + this.currentLight.getClass());
+        }
+
+        int numSamples = this.samplingMode.numSamples();
+
+        this.indirectColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
+        this.directColorBuffer = new ColorBuffer(this.geometryLightmapSize, numSamples);
+        this.reverseShadowBuffer = new GrayBuffer(this.geometryLightmapSize, numSamples);
     }
 
     private float lerp(Vector3fc weights, int i0, int i1, int i2, int offset) {
@@ -551,7 +581,7 @@ public class BakedLighting {
         Vector3f a = new Vector3f();
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
-        
+
         this.status.setProgressBarStep(this.lightmapperQuads.length);
 
         for (int i = 0; i < this.lightmapperQuads.length; i++) {
@@ -573,11 +603,11 @@ public class BakedLighting {
 
                 float v2x = lightmapVertices[(((j * 3) + 2) * 2) + 0] + quad.getX();
                 float v2y = lightmapVertices[(((j * 3) + 2) * 2) + 1] + quad.getY();
-                
+
                 a.set(v0x, v0y, 0f);
                 b.set(v1x, v1y, 0f);
                 c.set(v2x, v2y, 0f);
-                
+
                 int minX = (int) Math.floor(Math.min(v0x, Math.min(v1x, v2x)));
                 int minY = (int) Math.floor(Math.min(v0y, Math.min(v1y, v2y)));
                 int maxX = (int) Math.ceil(Math.max(v0x, Math.max(v1x, v2x)));
@@ -589,7 +619,7 @@ public class BakedLighting {
                 maxY = clamp(maxY, 0, this.geometryLightmapSize - 1);
 
                 SamplingMode mode = this.samplingMode;
-                
+
                 raster:
                 for (int y = minY; y <= maxY; y++) {
                     for (int x = minX; x <= maxX; x++) {
@@ -604,15 +634,15 @@ public class BakedLighting {
                             float wx = weights.x();
                             float wy = weights.y();
                             float wz = weights.z();
-                            
+
                             if (!Float.isFinite(wx) || !Float.isFinite(wy) || !Float.isFinite(wz)) {
                                 break raster;
                             }
-                            
+
                             if (wx < 0f || wy < 0f || wz < 0f) {
                                 continue;
                             }
-                            
+
                             this.sampleBuffer.write(true, x, y, s);
                             this.trianglesBuffer.write(triangle, x, y, s);
                             this.quadsBuffer.write(i, x, y, s);
@@ -796,28 +826,73 @@ public class BakedLighting {
         }
     }
 
-    private void randomSunDirection(Vector3f outDirection, Random random) {
-        float x;
-        float y;
-        float z;
-        float dist;
+    private void randomLightDirection(Vector3f position, Vector3f outDirection, Random random) {
+        switch (this.lightType) {
+            case 0 -> {
+                if (this.fastMode) {
+                    outDirection.set(this.sun.getDirectionNegated());
+                    return;
+                }
 
-        do {
-            x = (random.nextFloat() * 2f) - 1f;
-            y = (random.nextFloat() * 2f) - 1f;
-            z = (random.nextFloat() * 2f) - 1f;
-            dist = (x * x) + (y * y) + (z * z);
-        } while (dist > 1f);
+                float x;
+                float y;
+                float z;
+                float dist;
 
-        outDirection.set(
-                x,
-                y,
-                z
-        )
-                .normalize()
-                .mul(this.scene.getSunSize())
-                .add(this.scene.getSunDirectionInverted())
-                .normalize();
+                do {
+                    x = (random.nextFloat() * 2f) - 1f;
+                    y = (random.nextFloat() * 2f) - 1f;
+                    z = (random.nextFloat() * 2f) - 1f;
+                    dist = (x * x) + (y * y) + (z * z);
+                } while (dist > 1f);
+
+                outDirection.set(
+                        x,
+                        y,
+                        z
+                )
+                        .normalize()
+                        .mul(this.sun.getLightSize())
+                        .add(this.sun.getDirectionNegated())
+                        .normalize();
+            }
+            case 1 -> {
+                if (this.fastMode) {
+                    outDirection.set(this.point.getPosition());
+                    return;
+                }
+
+                float dirX = this.point.getPosition().x() - position.x();
+                float dirY = this.point.getPosition().y() - position.y();
+                float dirZ = this.point.getPosition().z() - position.z();
+                float invlength = (float) (1f / Math.sqrt((dirX * dirX) + (dirY * dirY) + (dirZ * dirZ)));
+                dirX *= invlength;
+                dirY *= invlength;
+                dirZ *= invlength;
+
+                do {
+                    float x;
+                    float y;
+                    float z;
+                    float dist;
+
+                    do {
+                        x = (random.nextFloat() * 2f) - 1f;
+                        y = (random.nextFloat() * 2f) - 1f;
+                        z = (random.nextFloat() * 2f) - 1f;
+                        dist = (x * x) + (y * y) + (z * z);
+                    } while (dist > 1f);
+
+                    outDirection.set(x, y, z).normalize();
+
+                } while (outDirection.dot(-dirX, -dirY, -dirZ) < 0f);
+
+                outDirection
+                        .mul(this.point.getLightSize())
+                        .add(this.point.getPosition());
+            }
+        }
+
     }
 
     private void randomTangentDirection(Vector3f outDirection, Random random) {
@@ -850,19 +925,40 @@ public class BakedLighting {
         if (this.scene.isDirectLightingEnabled()) {
             processDirect(state, direct);
         } else if (this.scene.fillEmptyValuesWithLightColors()) {
-            direct.output.set(this.scene.getSunDiffuseColor());
+            switch (this.lightType) {
+                case 0 -> {
+                    direct.output
+                            .set(this.sun.getDiffuse());
+                }
+                case 1 -> {
+                    direct.output
+                            .set(this.point.getDiffuse())
+                            .div(this.point.getPosition().distanceSquared(state.position));
+                }
+            }
         }
-        
+
         if (this.scene.isShadowsEnabled()) {
             processShadow(state, shadow);
-        } else if (this.scene.fillEmptyValuesWithLightColors()) {
+        } else {
             shadow.output = 1f;
         }
-        
+
         if (this.scene.isIndirectLightingEnabled() && !this.fastMode) {
             processIndirect(state, indirect);
         } else if (this.scene.fillEmptyValuesWithLightColors() || this.fastMode) {
-            indirect.output.set(this.scene.getSunAmbientColor());
+            switch (this.lightType) {
+                case 0 -> {
+                    indirect.output
+                            .set(this.sun.getDiffuse());
+                }
+                case 1 -> {
+                    indirect.output
+                            .set(this.point.getDiffuse())
+                            .mul(0.03f)
+                            .div(this.point.getPosition().distanceSquared(state.position));
+                }
+            }
         }
     }
 
@@ -870,10 +966,27 @@ public class BakedLighting {
             SampleState state,
             DirectState direct
     ) {
-        direct.output
-                .set(this.scene.getSunDiffuseColor())
-                .mul(Math.max(state.normal.dot(this.scene.getSunDirectionInverted()), 0f))
-                ;
+        switch (this.lightType) {
+            case 0 -> {
+                direct.output
+                        .set(this.sun.getDiffuse())
+                        .mul(Math.max(state.normal.dot(this.sun.getDirectionNegated()), 0f));
+            }
+            case 1 -> {
+                float dirX = this.point.getPosition().x() - state.position.x();
+                float dirY = this.point.getPosition().y() - state.position.y();
+                float dirZ = this.point.getPosition().z() - state.position.z();
+                float length = (float) Math.sqrt((dirX * dirX) + (dirY * dirY) + (dirZ * dirZ));
+                float invlength = 1f / length;
+                dirX *= invlength;
+                dirY *= invlength;
+                dirZ *= invlength;
+                direct.output
+                        .set(this.point.getDiffuse())
+                        .mul(Math.max(state.normal.dot(dirX, dirY, dirZ), 0f))
+                        .div(length * length);
+            }
+        }
     }
 
     private void processShadow(
@@ -884,26 +997,31 @@ public class BakedLighting {
                 .set(state.triangleNormal)
                 .mul(this.scene.getRayOffset())
                 .add(state.position);
-        
+
         int rays = this.scene.getShadowRaysPerSample();
         if (this.fastMode) {
             rays = 1;
         }
-        
+
         float shadowValue = 0f;
         for (int i = 0; i < rays; i++) {
-            if (this.fastMode) {
-                shadow.randomDirection.set(this.scene.getSunDirectionInverted());
-            } else {
-                randomSunDirection(shadow.randomDirection, state.random);
-            }
-            if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection, this.scene.getGeometries())) {
-                shadowValue++;
+            randomLightDirection(state.position, shadow.randomDirection, state.random);
+            switch (this.lightType) {
+                case 0 -> {
+                    if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection, this.geometries)) {
+                        shadowValue++;
+                    }
+                }
+                case 1 -> {
+                    if (Geometry.fastTestLine(shadow.offsetOrigin, shadow.randomDirection, this.geometries)) {
+                        shadowValue++;
+                    }
+                }
             }
             this.status.rays++;
         }
         shadowValue /= rays;
-        
+
         shadow.output = 1f - shadowValue;
     }
 
@@ -926,22 +1044,40 @@ public class BakedLighting {
 
             boolean foundLight = false;
             int bounceCount = 0;
+            bounceLoop:
             for (int j = 0; j < this.scene.getIndirectBounces(); j++) {
                 if (j != 0) {
-                    randomSunDirection(indirect.randomLightDirection, state.random);
+                    randomLightDirection(indirect.bouncePosition, indirect.randomLightDirection, state.random);
                     this.status.rays++;
-                    if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, this.scene.getGeometries())) {
-                        foundLight = true;
-                        indirect.lightColor.set(this.scene.getSunDiffuseColor());
-                        break;
+                    switch (this.lightType) {
+                        case 0 -> {
+                            if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, this.geometries)) {
+                                foundLight = true;
+                                indirect.lightColor.set(this.sun.getDiffuse());
+                                break bounceLoop;
+                            }
+                        }
+                        case 1 -> {
+                            if (!Geometry.fastTestLine(indirect.bouncePosition, indirect.randomLightDirection, this.geometries)) {
+                                foundLight = true;
+                                float invlength = 1f / this.point.getPosition().distanceSquared(indirect.bouncePosition);
+                                indirect.lightColor
+                                        .set(this.currentLight.getDiffuse())
+                                        .mul(invlength);
+                                break bounceLoop;
+                            }
+                        }
                     }
-                }
 
+                }
+                
                 this.status.rays++;
                 RayResult[] results = Geometry.testRay(indirect.bouncePosition, indirect.bounceDirection, this.scene.getGeometries());
                 if (results.length == 0) {
-                    foundLight = true;
-                    indirect.lightColor.set(this.scene.getSunAmbientColor());
+                    if (this.lightType == 0) {
+                        foundLight = true;
+                        indirect.lightColor.set(this.sun.getAmbient());
+                    }
                     break;
                 }
 
@@ -953,11 +1089,11 @@ public class BakedLighting {
 
                 SoftwareTexture rayTexture = this.sceneTextures.get(closestRay.getGeometry().getMesh().getTextureHint());
                 rayTexture.sampleNearest(u, v, indirect.bounceColor, 0);
-                
+
                 indirect.bounceColor[0] = (float) Math.pow(indirect.bounceColor[0], 2.2);
                 indirect.bounceColor[1] = (float) Math.pow(indirect.bounceColor[1], 2.2);
                 indirect.bounceColor[2] = (float) Math.pow(indirect.bounceColor[2], 2.2);
-                
+
                 indirect.bounceColors[bounceCount].set(indirect.bounceColor);
                 bounceCount++;
 
@@ -994,7 +1130,7 @@ public class BakedLighting {
         if (this.fastMode) {
             return;
         }
-        
+
         int numSamples = this.samplingMode.numSamples();
         final ColorBuffer indirectOutput = new ColorBuffer(this.geometryLightmapSize, numSamples);
         final GrayBuffer reversedShadowOutput = new GrayBuffer(this.geometryLightmapSize, numSamples);
@@ -1268,7 +1404,7 @@ public class BakedLighting {
 
         List<Future<?>> tasks = new ArrayList<>();
         for (int i = 0; i < this.lightmapperQuads.length; i += numberOfCores) {
-            setStatusText("Generating Margins ("+i+"/"+this.lightmapperQuads.length+")");
+            setStatusText("Generating Margins (" + i + "/" + this.lightmapperQuads.length + ")");
             for (int j = 0; j < numberOfCores; j++) {
                 final int index = i + j;
                 if (index < this.lightmapperQuads.length) {
@@ -1277,7 +1413,7 @@ public class BakedLighting {
                     }));
                 }
             }
-            for (Future<?> task:tasks) {
+            for (Future<?> task : tasks) {
                 try {
                     task.get();
                     this.status.stepProgressBar();
@@ -1340,13 +1476,13 @@ public class BakedLighting {
         float[] lineColorData = new float[this.geometryLightmapSize * 3];
 
         Vector3f color = new Vector3f();
-        
+
         this.status.setProgressBarStep(this.geometryLightmapSize);
         for (int y = 0; y < this.geometryLightmapSize; y++) {
             setStatusText("Writing to Output Buffer (" + y + "/" + this.geometryLightmapSize + ")");
             for (int x = 0; x < this.geometryLightmapSize; x++) {
                 this.resultBuffer.read(color, x, y, 0);
-                
+
                 lineColorData[(x * 3) + 0] = color.x();
                 lineColorData[(x * 3) + 1] = color.y();
                 lineColorData[(x * 3) + 2] = color.z();
@@ -1407,9 +1543,12 @@ public class BakedLighting {
             for (int i = 0; i < this.geometries.size(); i++) {
                 loadGeometry(i);
                 computeBuffers();
-                bakeLightmap();
-                denoiseBuffers();
-                combineBuffers();
+                for (int j = 0; j < this.lights.size(); j++) {
+                    loadLight(j);
+                    bakeLightmap();
+                    denoiseBuffers();
+                    combineBuffers();
+                }
                 generateMargins();
                 output();
                 createLightmapTexture();

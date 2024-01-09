@@ -38,9 +38,10 @@ public class Geometries {
 
     public static final MeshData[] GARAGE;
     public static final MeshData CIENCOLA;
+    public static final MeshData SPHERE;
     
     static {
-        Map<String, MeshData> meshes = GeometriesLoader.load("garage.obj.gz", "ciencola.obj");
+        Map<String, MeshData> meshes = GeometriesLoader.load("garage.obj.gz", "ciencola.obj", "sphere.obj");
         MeshData bricks = meshes.get("garage.obj.gz@bricks");
         MeshData concrete = meshes.get("garage.obj.gz@concrete");
         MeshData grass = meshes.get("garage.obj.gz@grass");
@@ -59,6 +60,10 @@ public class Geometries {
         MeshData ciencola = meshes.get("ciencola.obj");
         ciencola.setTextureHint(Textures.CIENCOLA);
         CIENCOLA = ciencola;
+        
+        MeshData debugSphere = meshes.get("sphere.obj");
+        debugSphere.setTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
+        SPHERE = debugSphere;
     }
     
     public static void init() {

@@ -108,26 +108,29 @@ public class Game {
 
         ciencola = new Geometry(Geometries.CIENCOLA);
         this.scene.getGeometries().add(ciencola);
-        
+
         matrix = new Matrix4f()
                 .translate(0f, 0.595f, -5f)
                 .scale(1f, 1.2f, 1f)
                 .scale(0.10f);
 
         ciencola.setModel(matrix);
-        
+
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
         
         this.scene.setIndirectLightingBlurArea(4f);
-        this.scene.setShadowBlurArea(1f);
+        this.scene.setShadowBlurArea(1.5f);
+
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_5);
         
-        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
-        
-        this.scene.setFastModeEnabled(false);
-        
-        
+        Scene.PointLight point = new Scene.PointLight();
+        point.setPosition(-8f, 2f, -7f);
+        point.setDiffuse(10f, 10f, 10f);
+        point.setLightSize(0.2f);
+        this.scene.getLights().add(point);
+
         /*float[] ciencolaVertices = e.getMesh().getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
         ciencolaVertices,
@@ -178,7 +181,7 @@ public class Game {
                 throw new RuntimeException(ex);
             }
         }
-        
+
         for (RayResult r : this.rays) {
             LineRender.queueRender(r.getOrigin(), r.getHitPosition());
         }
@@ -202,6 +205,7 @@ public class Game {
         program.setTextureUnit(0);
         program.setLightmapTextureUnit(1);
         program.setLightingEnabled(false);
+        program.setColor(1f, 1f, 1f, 1f);
         for (Geometry geo : this.scene.getGeometries()) {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, geo.getMesh().getTextureHint());
@@ -219,6 +223,35 @@ public class Game {
             }
             mesh.render();
             glBindVertexArray(0);
+        }
+        for (Scene.Light light : this.scene.getLights()) {
+            if (light instanceof Scene.PointLight p) {
+                float r = p.getDiffuse().x();
+                float g = p.getDiffuse().y();
+                float b = p.getDiffuse().z();
+                float max = Math.max(r, Math.max(g, b));
+                if (max > 1f) {
+                    float invmax = 1f / max;
+                    r *= invmax;
+                    g *= invmax;
+                    b *= invmax;
+                }
+                program.setColor(r, g, b, 1f);
+                Matrix4f model = new Matrix4f();
+                model.translate(p.getPosition()).scale(p.getLightSize());
+                program.setModel(model);
+                
+                MeshData sphere = Geometries.SPHERE;
+                
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, sphere.getTextureHint());
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, sphere.getTextureHint());
+                
+                glBindVertexArray(Geometries.SPHERE.getVAO());
+                sphere.render();
+                glBindVertexArray(0);
+            }
         }
         glUseProgram(0);
 
@@ -297,7 +330,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1f / 0.125f);
+                this.status = BakedLighting.bake(this.scene, 1f / 0.1f);
             }
         }
     }

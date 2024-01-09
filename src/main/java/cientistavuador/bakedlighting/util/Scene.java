@@ -37,88 +37,135 @@ import org.joml.Vector3fc;
  * @author Cien
  */
 public class Scene {
-    
+
+    public static class Light {
+
+        private final Vector3f diffuse = new Vector3f(1.3f, 1.3f, 1.3f);
+        
+        private float lightSize = 0.02f;
+
+        protected Light() {
+
+        }
+        
+        public Vector3fc getDiffuse() {
+            return diffuse;
+        }
+        
+        public void setDiffuse(float r, float g, float b) {
+            this.diffuse.set(r, g, b);
+        }
+
+        public void setDiffuse(Vector3fc diffuse) {
+            setDiffuse(diffuse.x(), diffuse.y(), diffuse.z());
+        }
+
+        public float getLightSize() {
+            return lightSize;
+        }
+
+        public void setLightSize(float lightSize) {
+            this.lightSize = lightSize;
+        }
+        
+    }
+
+    public static class DirectionalLight extends Light {
+
+        private final Vector3f ambient = new Vector3f(0.3f, 0.4f, 0.5f);
+
+        private final Vector3f direction = new Vector3f(0.5f, -2f, -1f).normalize();
+        private final Vector3f directionNegated = new Vector3f(this.direction).negate();
+
+        public DirectionalLight() {
+
+        }
+
+        public Vector3fc getDirection() {
+            return direction;
+        }
+
+        public Vector3fc getDirectionNegated() {
+            return directionNegated;
+        }
+
+        public void setDirection(float x, float y, float z) {
+            this.direction.set(x, y, z).normalize();
+            this.directionNegated.set(this.direction).negate();
+        }
+
+        public void setDirection(Vector3fc direction) {
+            setDiffuse(direction.x(), direction.y(), direction.z());
+        }
+
+        public Vector3fc getAmbient() {
+            return ambient;
+        }
+
+        public void setAmbient(float r, float g, float b) {
+            this.ambient.set(r, g, b);
+        }
+
+        public void setAmbient(Vector3fc ambient) {
+            setAmbient(ambient.x(), ambient.y(), ambient.z());
+        }
+
+    }
+
+    public static class PointLight extends Light {
+
+        private final Vector3f position = new Vector3f(-1f, 2f, 6f);
+        private float cutoff = 0.001f;
+
+        public PointLight() {
+
+        }
+
+        public Vector3fc getPosition() {
+            return position;
+        }
+
+        public void setPosition(float x, float y, float z) {
+            this.position.set(x, y, z);
+        }
+
+        public void setPosition(Vector3fc position) {
+            setPosition(position.x(), position.y(), position.z());
+        }
+    }
+
     private final List<Geometry> geometries = new ArrayList<>();
-    
-    private float sunSize = 0.02f;
-    private final Vector3f sunDirection = new Vector3f(0.5f, -2f, -1f).normalize();
-    private final Vector3f sunDirectionInverted = new Vector3f(this.sunDirection).negate();
-    private final Vector3f sunDiffuseColor = new Vector3f(1.3f, 1.3f, 1.3f);
-    private final Vector3f sunAmbientColor = new Vector3f(0.3f, 0.4f, 0.5f);
-    
-    private SamplingMode samplingMode = SamplingMode.SAMPLE_4;
-    
+    private final List<Light> lights = new ArrayList<>();
+
+    private SamplingMode samplingMode = SamplingMode.SAMPLE_5;
+
     private boolean directLightingEnabled = true;
-    
+
     private boolean shadowsEnabled = true;
     private int shadowRaysPerSample = 12;
     private float shadowBlurArea = 1.5f;
-    
+
     private boolean indirectLightingEnabled = true;
-    private boolean fillEmptyValuesWithLightColors = false;
     private int indirectRaysPerSample = 8;
     private int indirectBounces = 4;
     private float indirectLightingBlurArea = 6f;
     private float indirectLightReflectionFactor = 1f;
-    
+
     private float rayOffset = 0.001f;
-    
+    private boolean fillEmptyValuesWithLightColors = false;
+
     private boolean fastModeEnabled = false;
-    
+
     public Scene() {
+
     }
 
     public List<Geometry> getGeometries() {
         return geometries;
     }
 
-    public float getSunSize() {
-        return sunSize;
-    }
-
-    public Vector3fc getSunDirection() {
-        return sunDirection;
-    }
-
-    public Vector3fc getSunDirectionInverted() {
-        return sunDirectionInverted;
-    }
-
-    public Vector3fc getSunDiffuseColor() {
-        return sunDiffuseColor;
-    }
-
-    public Vector3fc getSunAmbientColor() {
-        return sunAmbientColor;
-    }
-
-    public void setSunSize(float sunSize) {
-        this.sunSize = sunSize;
-    }
-    
-    public void setSunDirection(float x, float y, float z) {
-        this.sunDirection.set(x, y, z).normalize();
-        this.sunDirectionInverted.set(this.sunDirection).negate();
-    }
-
-    public void setSunDiffuseColor(float r, float g, float b) {
-        this.sunDiffuseColor.set(r, g, b);
-    }
-
-    public void setSunAmbientColor(float r, float g, float b) {
-        this.sunAmbientColor.set(r, g, b);
-    }
-
-    public void setSunDirection(Vector3fc direction) {
-        setSunDirection(direction.x(), direction.y(), direction.z());
-    }
-
-    public void setSunDiffuseColor(Vector3fc color) {
-        setSunDiffuseColor(color.x(), color.y(), color.z());
-    }
-
-    public void setSunAmbientColor(Vector3fc color) {
-        setSunAmbientColor(color.x(), color.y(), color.z());
+    public List<Light> getLights() {
+        return lights;
     }
 
     public SamplingMode getSamplingMode() {
@@ -128,7 +175,7 @@ public class Scene {
     public void setSamplingMode(SamplingMode samplingMode) {
         this.samplingMode = samplingMode;
     }
-    
+
     public boolean isDirectLightingEnabled() {
         return directLightingEnabled;
     }
@@ -136,7 +183,7 @@ public class Scene {
     public void setDirectLightingEnabled(boolean directLightingEnabled) {
         this.directLightingEnabled = directLightingEnabled;
     }
-    
+
     public boolean isShadowsEnabled() {
         return shadowsEnabled;
     }
@@ -224,5 +271,5 @@ public class Scene {
     public boolean fillEmptyValuesWithLightColors() {
         return fillEmptyValuesWithLightColors;
     }
-    
+
 }

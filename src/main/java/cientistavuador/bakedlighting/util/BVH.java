@@ -26,14 +26,10 @@
  */
 package cientistavuador.bakedlighting.util;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Queue;
 import java.util.Set;
-import org.joml.Intersectionf;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
 
