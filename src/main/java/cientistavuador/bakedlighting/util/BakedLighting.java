@@ -734,6 +734,7 @@ public class BakedLighting {
         public final Vector3f bouncePosition = new Vector3f();
         public final Vector3f bounceDirection = new Vector3f();
         public final Vector3f bounceWeights = new Vector3f();
+        public final Vector3f smoothNormal = new Vector3f();
         public final float[] bounceColor = new float[4];
     }
 
@@ -858,7 +859,7 @@ public class BakedLighting {
             }
             case 1 -> {
                 if (this.fastMode) {
-                    outDirection.set(this.point.getPosition());
+                    outDirection.set(this.point.getPosition()).sub(position);
                     return;
                 }
 
@@ -889,7 +890,8 @@ public class BakedLighting {
 
                 outDirection
                         .mul(this.point.getLightSize())
-                        .add(this.point.getPosition());
+                        .add(this.point.getPosition())
+                        .sub(position);
             }
         }
 
@@ -922,6 +924,18 @@ public class BakedLighting {
             ShadowState shadow,
             IndirectState indirect
     ) {
+        if (this.lightType == 1) {
+            float falloff = state.position.distance(this.point.getPosition());
+            falloff = 1f / (falloff * falloff);
+            float luminance = falloff * this.point.getLuminance();
+            if (luminance < this.point.getBakeCutoff()) {
+                direct.output.zero();
+                shadow.output = 1f;
+                indirect.output.zero();
+                return;
+            }
+        }
+
         if (this.scene.isDirectLightingEnabled()) {
             processDirect(state, direct);
         } else if (this.scene.fillEmptyValuesWithLightColors()) {
@@ -950,7 +964,7 @@ public class BakedLighting {
             switch (this.lightType) {
                 case 0 -> {
                     indirect.output
-                            .set(this.sun.getDiffuse());
+                            .set(this.sun.getAmbient());
                 }
                 case 1 -> {
                     indirect.output
@@ -962,31 +976,35 @@ public class BakedLighting {
         }
     }
 
-    private void processDirect(
-            SampleState state,
-            DirectState direct
-    ) {
+    private void calculateDirect(Vector3fc position, Vector3fc normal, Vector3f output) {
         switch (this.lightType) {
             case 0 -> {
-                direct.output
+                output
                         .set(this.sun.getDiffuse())
-                        .mul(Math.max(state.normal.dot(this.sun.getDirectionNegated()), 0f));
+                        .mul(Math.max(normal.dot(this.sun.getDirectionNegated()), 0f));
             }
             case 1 -> {
-                float dirX = this.point.getPosition().x() - state.position.x();
-                float dirY = this.point.getPosition().y() - state.position.y();
-                float dirZ = this.point.getPosition().z() - state.position.z();
+                float dirX = this.point.getPosition().x() - position.x();
+                float dirY = this.point.getPosition().y() - position.y();
+                float dirZ = this.point.getPosition().z() - position.z();
                 float length = (float) Math.sqrt((dirX * dirX) + (dirY * dirY) + (dirZ * dirZ));
                 float invlength = 1f / length;
                 dirX *= invlength;
                 dirY *= invlength;
                 dirZ *= invlength;
-                direct.output
+                output
                         .set(this.point.getDiffuse())
-                        .mul(Math.max(state.normal.dot(dirX, dirY, dirZ), 0f))
+                        .mul(Math.max(normal.dot(dirX, dirY, dirZ), 0f))
                         .div(length * length);
             }
         }
+    }
+
+    private void processDirect(
+            SampleState state,
+            DirectState direct
+    ) {
+        calculateDirect(state.position, state.normal, direct.output);
     }
 
     private void processShadow(
@@ -1008,12 +1026,13 @@ public class BakedLighting {
             randomLightDirection(state.position, shadow.randomDirection, state.random);
             switch (this.lightType) {
                 case 0 -> {
-                    if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection, this.geometries)) {
+                    if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection, Float.POSITIVE_INFINITY, this.geometries)) {
                         shadowValue++;
                     }
                 }
                 case 1 -> {
-                    if (Geometry.fastTestLine(shadow.offsetOrigin, shadow.randomDirection, this.geometries)) {
+                    float length = shadow.randomDirection.length();
+                    if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection.div(length), length, this.geometries)) {
                         shadowValue++;
                     }
                 }
@@ -1038,39 +1057,39 @@ public class BakedLighting {
             float offsetY = state.triangleNormal.y() * rayOffset;
             float offsetZ = state.triangleNormal.z() * rayOffset;
 
+            indirect.smoothNormal.set(state.normal);
+
             indirect.bouncePosition
                     .set(state.position)
                     .add(offsetX, offsetY, offsetZ);
 
             boolean foundLight = false;
             int bounceCount = 0;
-            bounceLoop:
             for (int j = 0; j < this.scene.getIndirectBounces(); j++) {
                 if (j != 0) {
                     randomLightDirection(indirect.bouncePosition, indirect.randomLightDirection, state.random);
                     this.status.rays++;
+                    
                     switch (this.lightType) {
                         case 0 -> {
-                            if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, this.geometries)) {
+                            if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, Float.POSITIVE_INFINITY, this.geometries)) {
                                 foundLight = true;
-                                indirect.lightColor.set(this.sun.getDiffuse());
-                                break bounceLoop;
                             }
                         }
                         case 1 -> {
-                            if (!Geometry.fastTestLine(indirect.bouncePosition, indirect.randomLightDirection, this.geometries)) {
+                            float length = indirect.randomLightDirection.length();
+                            if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection.div(length), length, this.geometries)) {
                                 foundLight = true;
-                                float invlength = 1f / this.point.getPosition().distanceSquared(indirect.bouncePosition);
-                                indirect.lightColor
-                                        .set(this.currentLight.getDiffuse())
-                                        .mul(invlength);
-                                break bounceLoop;
                             }
                         }
                     }
-
+                    
+                    if (foundLight) {
+                        calculateDirect(indirect.bouncePosition, indirect.smoothNormal, indirect.lightColor);
+                        break;
+                    }
                 }
-                
+
                 this.status.rays++;
                 RayResult[] results = Geometry.testRay(indirect.bouncePosition, indirect.bounceDirection, this.scene.getGeometries());
                 if (results.length == 0) {
@@ -1086,6 +1105,12 @@ public class BakedLighting {
 
                 float u = closestRay.lerp(indirect.bounceWeights, MeshData.UV_OFFSET + 0);
                 float v = closestRay.lerp(indirect.bounceWeights, MeshData.UV_OFFSET + 1);
+
+                float nx = closestRay.lerp(indirect.bounceWeights, MeshData.N_XYZ_OFFSET + 0);
+                float ny = closestRay.lerp(indirect.bounceWeights, MeshData.N_XYZ_OFFSET + 1);
+                float nz = closestRay.lerp(indirect.bounceWeights, MeshData.N_XYZ_OFFSET + 2);
+
+                indirect.smoothNormal.set(nx, ny, nz).normalize();
 
                 SoftwareTexture rayTexture = this.sceneTextures.get(closestRay.getGeometry().getMesh().getTextureHint());
                 rayTexture.sampleNearest(u, v, indirect.bounceColor, 0);

@@ -59,9 +59,12 @@ public class RayResult extends LocalRayResult implements Comparable<RayResult> {
         this.hitPosition.set(local.getLocalHitPosition());
         this.triangleNormal.set(local.getLocalTriangleNormal());
         geometry.getModel().transformProject(this.origin);
-        geometry.getNormalModel().transform(this.direction).normalize();
+        geometry.getModel()
+                .transformProject(this.direction.add(local.getLocalOrigin()))
+                .sub(this.origin)
+                .normalize();
         geometry.getModel().transformProject(this.hitPosition);
-        geometry.getNormalModel().transform(this.triangleNormal).normalize();
+        geometry.getNormalModel().transform(this.triangleNormal);
         this.distance = this.origin.distance(this.hitPosition);
     }
 

@@ -68,12 +68,16 @@ public class Scene {
             this.lightSize = lightSize;
         }
         
+        public float getLuminance() {
+            return getDiffuse().length();
+        }
+        
     }
 
     public static class DirectionalLight extends Light {
 
-        private final Vector3f ambient = new Vector3f(0.3f, 0.4f, 0.5f);
-
+        private final Vector3f ambient = new Vector3f(0.2f, 0.3f, 0.4f);
+        
         private final Vector3f direction = new Vector3f(0.5f, -2f, -1f).normalize();
         private final Vector3f directionNegated = new Vector3f(this.direction).negate();
 
@@ -115,7 +119,7 @@ public class Scene {
     public static class PointLight extends Light {
 
         private final Vector3f position = new Vector3f(-1f, 2f, 6f);
-        private float cutoff = 0.001f;
+        private float bakeCutoff = 1f / 255f;
 
         public PointLight() {
 
@@ -132,6 +136,16 @@ public class Scene {
         public void setPosition(Vector3fc position) {
             setPosition(position.x(), position.y(), position.z());
         }
+
+        public float getBakeCutoff() {
+            return bakeCutoff;
+        }
+
+        public void setBakeCutoff(float bakeCutoff) {
+            this.bakeCutoff = bakeCutoff;
+        }
+        
+        
     }
 
     private final List<Geometry> geometries = new ArrayList<>();

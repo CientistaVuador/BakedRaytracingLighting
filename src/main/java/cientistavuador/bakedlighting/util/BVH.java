@@ -302,67 +302,8 @@ public class BVH implements Aab {
     public void getMax(Vector3f max) {
         max.set(this.max);
     }
-
-    private boolean fastTestLine(Vector3f a, Vector3f b, Vector3f c, Set<Integer> tested, BVH e, Vector3fc p0, Vector3f p1) {
-        if (IntersectionUtils.testLineAab(p0, p1, e.getMin(), e.getMax())) {
-            if (e.getLeft() == null && e.getRight() == null) {
-                int[] nodeTriangles = e.getTriangles();
-                for (int i = 0; i < nodeTriangles.length; i++) {
-                    int triangle = nodeTriangles[i];
-
-                    int v0xyz = (this.indices[(triangle * 3) + 0] * this.vertexSize) + this.xyzOffset;
-                    int v1xyz = (this.indices[(triangle * 3) + 1] * this.vertexSize) + this.xyzOffset;
-                    int v2xyz = (this.indices[(triangle * 3) + 2] * this.vertexSize) + this.xyzOffset;
-
-                    if (!tested.contains(triangle)) {
-                        tested.add(triangle);
-
-                        a.set(
-                                this.vertices[v0xyz + 0],
-                                this.vertices[v0xyz + 1],
-                                this.vertices[v0xyz + 2]
-                        );
-                        b.set(
-                                this.vertices[v1xyz + 0],
-                                this.vertices[v1xyz + 1],
-                                this.vertices[v1xyz + 2]
-                        );
-                        c.set(
-                                this.vertices[v2xyz + 0],
-                                this.vertices[v2xyz + 1],
-                                this.vertices[v2xyz + 2]
-                        );
-
-                        return IntersectionUtils.testLineTriangle(p0, p1, a, b, c);
-                    }
-                }
-            }
-
-            if (e.getLeft() != null) {
-                if (fastTestLine(a, b, c, tested, e.getLeft(), p0, p1)) {
-                    return true;
-                }
-            }
-            if (e.getRight() != null) {
-                if (fastTestLine(a, b, c, tested, e.getRight(), p0, p1)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
     
-    public boolean fastTestLine(Vector3fc p0, Vector3f p1) {
-        Vector3f a = new Vector3f();
-        Vector3f b = new Vector3f();
-        Vector3f c = new Vector3f();
-
-        Set<Integer> tested = new HashSet<>();
-
-        return fastTestLine(a, b, c, tested, this, p0, p1);
-    }
-    
-    private boolean fastTestRay(Vector3f a, Vector3f b, Vector3f c, Set<Integer> tested, BVH e, Vector3fc localOrigin, Vector3fc localDirection) {
+    private boolean fastTestRay(Vector3f a, Vector3f b, Vector3f c, Set<Integer> tested, BVH e, Vector3fc localOrigin, Vector3fc localDirection, float maxLength) {
         if (IntersectionUtils.testRayAab(localOrigin, localDirection, e.getMin(), e.getMax())) {
             if (e.getLeft() == null && e.getRight() == null) {
                 int[] nodeTriangles = e.getTriangles();
@@ -393,7 +334,7 @@ public class BVH implements Aab {
                         );
 
                         float hit = IntersectionUtils.intersectRayTriangle(localOrigin, localDirection, a, b, c);
-                        if (hit >= 0f) {
+                        if (hit >= 0f && (!Float.isFinite(maxLength) || hit <= maxLength)) {
                             return true;
                         }
                     }
@@ -401,12 +342,12 @@ public class BVH implements Aab {
             }
 
             if (e.getLeft() != null) {
-                if (fastTestRay(a, b, c, tested, e.getLeft(), localOrigin, localDirection)) {
+                if (fastTestRay(a, b, c, tested, e.getLeft(), localOrigin, localDirection, maxLength)) {
                     return true;
                 }
             }
             if (e.getRight() != null) {
-                if (fastTestRay(a, b, c, tested, e.getRight(), localOrigin, localDirection)) {
+                if (fastTestRay(a, b, c, tested, e.getRight(), localOrigin, localDirection, maxLength)) {
                     return true;
                 }
             }
@@ -414,14 +355,14 @@ public class BVH implements Aab {
         return false;
     }
 
-    public boolean fastTestRay(Vector3fc localOrigin, Vector3fc localDirection) {
+    public boolean fastTestRay(Vector3fc localOrigin, Vector3fc localDirection, float maxLength) {
         Vector3f a = new Vector3f();
         Vector3f b = new Vector3f();
         Vector3f c = new Vector3f();
 
         Set<Integer> tested = new HashSet<>();
 
-        return fastTestRay(a, b, c, tested, this, localOrigin, localDirection);
+        return fastTestRay(a, b, c, tested, this, localOrigin, localDirection, maxLength);
     }
 
     private void testRay(

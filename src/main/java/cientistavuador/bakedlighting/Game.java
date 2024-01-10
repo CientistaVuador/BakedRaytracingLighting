@@ -47,8 +47,6 @@ import cientistavuador.bakedlighting.util.Scene;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -121,15 +119,20 @@ public class Game {
         this.scene.setShadowsEnabled(true);
         
         this.scene.setIndirectLightingBlurArea(4f);
-        this.scene.setShadowBlurArea(1.5f);
+        this.scene.setShadowBlurArea(1.2f);
 
-        this.scene.setSamplingMode(SamplingMode.SAMPLE_5);
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
+        
+        this.scene.setFastModeEnabled(false);
         
         Scene.PointLight point = new Scene.PointLight();
-        point.setPosition(-8f, 2f, -7f);
-        point.setDiffuse(10f, 10f, 10f);
+        point.setPosition(0f, 2f, 6f);
+        point.setDiffuse(20f, 20f, 20f);
         point.setLightSize(0.2f);
         this.scene.getLights().add(point);
+        
+        Scene.DirectionalLight sun = new Scene.DirectionalLight();
+        //this.scene.getLights().add(sun);
 
         /*float[] ciencolaVertices = e.getMesh().getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
@@ -330,7 +333,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1f / 0.1f);
+                this.status = BakedLighting.bake(this.scene, 1f / 0.05f);
             }
         }
     }

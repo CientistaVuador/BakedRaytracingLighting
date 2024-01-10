@@ -45,59 +45,62 @@ import org.joml.Vector3fc;
  * @author Cien
  */
 public class Geometry {
-    
-    public static boolean fastTestLine(Vector3fc a, Vector3fc b, List<Geometry> geometries) {
+
+    public static boolean fastTestRay(Vector3fc origin, Vector3fc direction, float maxLength, List<Geometry> geometries) {
         if (geometries.isEmpty()) {
             return false;
         }
-        
-        Vector3f transformedA = new Vector3f();
-        Vector3f transformedB = new Vector3f();
-        
-        for (Geometry g:geometries) {
-            g.getInverseModel().transformProject(transformedA.set(a));
-            g.getInverseModel().transformProject(transformedB.set(b));
-            
-            if (g.getMesh().getBVH().fastTestLine(transformedA, transformedB)) {
-                return true;
-            }
-        }
-        return false;
-    }
-    
-    public static boolean fastTestRay(Vector3fc origin, Vector3fc direction, List<Geometry> geometries) {
-        if (geometries.isEmpty()) {
-            return false;
-        }
-        
+
         Vector3f transformedOrigin = new Vector3f();
         Vector3f transformedDirection = new Vector3f();
-        
-        for (Geometry g:geometries) {
+
+        for (Geometry g : geometries) {
             g.getInverseModel().transformProject(transformedOrigin.set(origin));
-            g.getInverseNormalModel().transform(transformedDirection.set(direction));
-            
-            if (g.getMesh().getBVH().fastTestRay(transformedOrigin, transformedDirection)) {
+
+            float length = maxLength;
+            if (Float.isFinite(length)) {
+                g.getInverseModel().transformProject(transformedDirection
+                        .set(direction)
+                        .mul(maxLength)
+                        .add(origin)
+                );
+                transformedDirection.sub(transformedOrigin);
+                length = transformedDirection.length();
+                transformedDirection.div(length);
+            } else {
+                g.getInverseModel().transformProject(transformedDirection
+                        .set(direction)
+                        .add(origin)
+                );
+                transformedDirection.sub(transformedOrigin).normalize();
+            }
+
+            if (g.getMesh().getBVH().fastTestRay(transformedOrigin, transformedDirection, length)) {
                 return true;
             }
         }
         return false;
     }
-    
+
     public static RayResult[] testRay(Vector3fc origin, Vector3fc direction, List<Geometry> geometries) {
         if (geometries.isEmpty()) {
             return new RayResult[0];
         }
+
         Vector3f transformedOrigin = new Vector3f();
         Vector3f transformedDirection = new Vector3f();
-        
+
         List<RayResult> rays = new ArrayList<>();
-        for (Geometry g:geometries) {
+        for (Geometry g : geometries) {
             g.getInverseModel().transformProject(transformedOrigin.set(origin));
-            g.getInverseNormalModel().transform(transformedDirection.set(direction));
-            
+            g.getInverseModel().transformProject(transformedDirection
+                    .set(direction)
+                    .add(origin)
+            );
+            transformedDirection.sub(transformedOrigin).normalize();
+
             List<LocalRayResult> localTest = g.getMesh().getBVH().testRay(transformedOrigin, transformedDirection);
-            for (LocalRayResult e:localTest) {
+            for (LocalRayResult e : localTest) {
                 rays.add(new RayResult(e, g));
             }
         }
@@ -105,9 +108,13 @@ public class Geometry {
         Arrays.sort(array);
         return array;
     }
-    
+
     public static RayResult[] testRay(Vector3fc origin, Vector3fc direction, Geometry... geometries) {
         return testRay(origin, direction, Arrays.asList(geometries));
+    }
+    
+    public static boolean fastTestRay(Vector3fc origin, Vector3fc direction, float maxLength, Geometry... geometries) {
+        return fastTestRay(origin, direction, maxLength, Arrays.asList(geometries));
     }
     
     private final MeshData mesh;
@@ -115,12 +122,12 @@ public class Geometry {
     private final Matrix4f inverseModel = new Matrix4f();
     private final Matrix3f normalModel = new Matrix3f();
     private final Matrix3f inverseNormalModel = new Matrix3f();
-    
+
     private int lightmapTextureHint = Textures.EMPTY_LIGHTMAP_TEXTURE;
     private MeshData.LightmapMesh lightmapMesh = null;
-    
+
     private float lightmapScale = 1f;
-    
+
     public Geometry(MeshData mesh) {
         this.mesh = mesh;
     }
@@ -144,7 +151,7 @@ public class Geometry {
     public Matrix3fc getInverseNormalModel() {
         return inverseNormalModel;
     }
-    
+
     public void setModel(Matrix4fc model) {
         this.model.set(model);
         this.model.invert(this.inverseModel);
@@ -175,5 +182,5 @@ public class Geometry {
     public void setLightmapScale(float lightmapScale) {
         this.lightmapScale = lightmapScale;
     }
-    
+
 }

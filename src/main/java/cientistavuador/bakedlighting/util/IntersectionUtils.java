@@ -49,61 +49,6 @@ public class IntersectionUtils {
         return Intersectionf.intersectRayTriangle(origin, dir, a, b, c, 1f / 100000f);
     }
     
-    public static boolean testLineTriangle(
-            float p0x, float p0y, float p0z,
-            float p1x, float p1y, float p1z,
-            float v0x, float v0y, float v0z,
-            float v1x, float v1y, float v1z,
-            float v2x, float v2y, float v2z
-    ) {
-        float dirX = p1x - p0x;
-        float dirY = p1y - p0y;
-        float dirZ = p1z - p0z;
-        float test = Intersectionf.intersectRayTriangle(
-                p0x, p0y, p0z,
-                dirX, dirY, dirZ,
-                v0x, v0y, v0z,
-                v1x, v1y, v1z,
-                v2x, v2y, v2z,
-                1f / 100000f
-        );
-        return test >= 0f && test <= 1f;
-    }
-    
-    public static boolean testLineTriangle(Vector3fc p0, Vector3fc p1, Vector3fc a, Vector3fc b, Vector3fc c) {
-        return testLineTriangle(
-                p0.x(), p0.y(), p0.z(),
-                p1.x(), p1.y(), p1.z(),
-                a.x(), a.y(), a.z(),
-                b.x(), b.y(), b.z(),
-                c.x(), c.y(), c.z()
-        );
-    }
-    
-    public static boolean testLineAab(
-            float p0x, float p0y, float p0z,
-            float p1x, float p1y, float p1z,
-            float minX, float minY, float minZ,
-            float maxX, float maxY, float maxZ
-    ) {
-        return Intersectionf.intersectLineSegmentAab(
-                p0x, p0y, p0z,
-                p1x, p1y, p1z,
-                minX, minY, minZ,
-                maxX, maxY, maxZ,
-                new Vector2f()
-        ) != Intersectionf.OUTSIDE;
-    }
-    
-    public static boolean testLineAab(Vector3fc p0, Vector3fc p1, Vector3fc min, Vector3fc max) {
-        return testLineAab(
-                p0.x(), p0.y(), p0.z(),
-                p1.x(), p1.y(), p1.z(),
-                min.x(), min.y(), min.z(),
-                max.x(), max.y(), max.z()
-        );
-    }
-    
     private static final ThreadLocal<Vector3f[]> threadLocalVectors = new ThreadLocal<>() {
         @Override
         protected Vector3f[] initialValue() {
