@@ -145,6 +145,61 @@ public class Scene {
             this.bakeCutoff = bakeCutoff;
         }
         
+    }
+    
+    public static class SpotLight extends PointLight {
+        
+        private final Vector3f direction = new Vector3f(0, -1, 0);
+        private float cutoffAngle = 30f;
+        private float outerCutoffAngle = 50f;
+        private float cutoffAngleRadiansCosine = calculateRadiansCosine(this.cutoffAngle);
+        private float outerCutoffAngleRadiansCosine = calculateRadiansCosine(this.outerCutoffAngle);
+        
+        public SpotLight() {
+            
+        }
+        
+        private float calculateRadiansCosine(float angle) {
+            return (float) Math.cos(Math.toRadians(angle));
+        }
+
+        public float getCutoffAngle() {
+            return cutoffAngle;
+        }
+
+        public void setCutoffAngle(float cutoffAngle) {
+            this.cutoffAngle = cutoffAngle;
+            this.cutoffAngleRadiansCosine = calculateRadiansCosine(this.cutoffAngle);
+        }
+
+        public float getCutoffAngleRadiansCosine() {
+            return cutoffAngleRadiansCosine;
+        }
+
+        public float getOuterCutoffAngle() {
+            return outerCutoffAngle;
+        }
+
+        public void setOuterCutoffAngle(float outerCutoffAngle) {
+            this.outerCutoffAngle = outerCutoffAngle;
+            this.outerCutoffAngleRadiansCosine = calculateRadiansCosine(this.outerCutoffAngle);
+        }
+
+        public float getOuterCutoffAngleRadiansCosine() {
+            return outerCutoffAngleRadiansCosine;
+        }
+        
+        public Vector3fc getDirection() {
+            return direction;
+        }
+        
+        public void setDirection(float x, float y, float z) {
+            this.direction.set(x, y, z).normalize();
+        }
+        
+        public void setDirection(Vector3fc dir) {
+            setDirection(dir.x(), dir.y(), dir.z());
+        }
         
     }
 
@@ -154,6 +209,7 @@ public class Scene {
     private SamplingMode samplingMode = SamplingMode.SAMPLE_5;
 
     private boolean directLightingEnabled = true;
+    private float directLightingAttenuationDistance = 0.75f;
 
     private boolean shadowsEnabled = true;
     private int shadowRaysPerSample = 12;
@@ -284,6 +340,14 @@ public class Scene {
 
     public boolean fillEmptyValuesWithLightColors() {
         return fillEmptyValuesWithLightColors;
+    }
+
+    public float getDirectLightingAttenuationDistance() {
+        return directLightingAttenuationDistance;
+    }
+
+    public void setDirectLightingAttenuationDistance(float directLightingAttenuationDistance) {
+        this.directLightingAttenuationDistance = directLightingAttenuationDistance;
     }
 
 }

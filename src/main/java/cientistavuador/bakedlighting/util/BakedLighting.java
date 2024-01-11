@@ -397,6 +397,7 @@ public class BakedLighting {
 
     private Scene.DirectionalLight sun = null;
     private Scene.PointLight point = null;
+    private Scene.SpotLight spot = null;
 
     private ColorBuffer indirectColorBuffer = null;
     private ColorBuffer directColorBuffer = null;
@@ -540,11 +541,18 @@ public class BakedLighting {
         if (this.currentLight instanceof Scene.DirectionalLight s) {
             this.sun = s;
             this.point = null;
+            this.spot = null;
             this.lightType = 0;
         } else if (this.currentLight instanceof Scene.PointLight p) {
             this.sun = null;
+            if (this.currentLight instanceof Scene.SpotLight s) {
+                this.spot = s;
+                this.lightType = 2;
+            } else {
+                this.spot = null;
+                this.lightType = 1;
+            }
             this.point = p;
-            this.lightType = 1;
         } else {
             throw new RuntimeException("Unsupported Light Type: " + this.currentLight.getClass());
         }
@@ -857,7 +865,7 @@ public class BakedLighting {
                         .add(this.sun.getDirectionNegated())
                         .normalize();
             }
-            case 1 -> {
+            case 1, 2 -> {
                 if (this.fastMode) {
                     outDirection.set(this.point.getPosition()).sub(position);
                     return;
@@ -924,7 +932,7 @@ public class BakedLighting {
             ShadowState shadow,
             IndirectState indirect
     ) {
-        if (this.lightType == 1) {
+        if (this.lightType == 1 || this.lightType == 2) {
             float falloff = state.position.distance(this.point.getPosition());
             falloff = 1f / (falloff * falloff);
             float luminance = falloff * this.point.getLuminance();
@@ -944,10 +952,10 @@ public class BakedLighting {
                     direct.output
                             .set(this.sun.getDiffuse());
                 }
-                case 1 -> {
+                case 1, 2 -> {
                     direct.output
                             .set(this.point.getDiffuse())
-                            .div(this.point.getPosition().distanceSquared(state.position));
+                            .div(this.point.getPosition().distanceSquared(state.position) + this.scene.getDirectLightingAttenuationDistance());
                 }
             }
         }
@@ -966,11 +974,11 @@ public class BakedLighting {
                     indirect.output
                             .set(this.sun.getAmbient());
                 }
-                case 1 -> {
+                case 1, 2 -> {
                     indirect.output
                             .set(this.point.getDiffuse())
                             .mul(0.03f)
-                            .div(this.point.getPosition().distanceSquared(state.position));
+                            .div(this.point.getPosition().distanceSquared(state.position) + this.scene.getDirectLightingAttenuationDistance());
                 }
             }
         }
@@ -983,7 +991,7 @@ public class BakedLighting {
                         .set(this.sun.getDiffuse())
                         .mul(Math.max(normal.dot(this.sun.getDirectionNegated()), 0f));
             }
-            case 1 -> {
+            case 1, 2 -> {
                 float dirX = this.point.getPosition().x() - position.x();
                 float dirY = this.point.getPosition().y() - position.y();
                 float dirZ = this.point.getPosition().z() - position.z();
@@ -992,10 +1000,17 @@ public class BakedLighting {
                 dirX *= invlength;
                 dirY *= invlength;
                 dirZ *= invlength;
+                float intensity = 1f;
+                if (this.lightType == 2) {
+                    float theta = this.spot.getDirection().dot(-dirX, -dirY, -dirZ);
+                    float epsilon = this.spot.getCutoffAngleRadiansCosine() - this.spot.getOuterCutoffAngleRadiansCosine();
+                    intensity = Math.min(Math.max((theta - this.spot.getOuterCutoffAngleRadiansCosine()) / epsilon, 0f), 1f);
+                }
                 output
                         .set(this.point.getDiffuse())
                         .mul(Math.max(normal.dot(dirX, dirY, dirZ), 0f))
-                        .div(length * length);
+                        .div((length * length) + this.scene.getDirectLightingAttenuationDistance())
+                        .mul(intensity);
             }
         }
     }
@@ -1004,7 +1019,11 @@ public class BakedLighting {
             SampleState state,
             DirectState direct
     ) {
-        calculateDirect(state.position, state.normal, direct.output);
+        Vector3fc normal = state.normal;
+        if (!normal.isFinite()) {
+            normal = state.triangleNormal;
+        }
+        calculateDirect(state.position, normal, direct.output);
     }
 
     private void processShadow(
@@ -1030,7 +1049,7 @@ public class BakedLighting {
                         shadowValue++;
                     }
                 }
-                case 1 -> {
+                case 1, 2 -> {
                     float length = shadow.randomDirection.length();
                     if (Geometry.fastTestRay(shadow.offsetOrigin, shadow.randomDirection.div(length), length, this.geometries)) {
                         shadowValue++;
@@ -1057,7 +1076,11 @@ public class BakedLighting {
             float offsetY = state.triangleNormal.y() * rayOffset;
             float offsetZ = state.triangleNormal.z() * rayOffset;
 
-            indirect.smoothNormal.set(state.normal);
+            if (state.normal.isFinite()) {
+                indirect.smoothNormal.set(state.normal);
+            } else {
+                indirect.smoothNormal.set(state.triangleNormal);
+            }
 
             indirect.bouncePosition
                     .set(state.position)
@@ -1067,26 +1090,28 @@ public class BakedLighting {
             int bounceCount = 0;
             for (int j = 0; j < this.scene.getIndirectBounces(); j++) {
                 if (j != 0) {
-                    randomLightDirection(indirect.bouncePosition, indirect.randomLightDirection, state.random);
-                    this.status.rays++;
-                    
-                    switch (this.lightType) {
-                        case 0 -> {
-                            if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, Float.POSITIVE_INFINITY, this.geometries)) {
-                                foundLight = true;
+                    calculateDirect(indirect.bouncePosition, indirect.smoothNormal, indirect.lightColor);
+                    if (!indirect.lightColor.equals(0f, 0f, 0f)) {
+                        randomLightDirection(indirect.bouncePosition, indirect.randomLightDirection, state.random);
+                        this.status.rays++;
+
+                        switch (this.lightType) {
+                            case 0 -> {
+                                if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection, Float.POSITIVE_INFINITY, this.geometries)) {
+                                    foundLight = true;
+                                }
+                            }
+                            case 1, 2 -> {
+                                float length = indirect.randomLightDirection.length();
+                                if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection.div(length), length, this.geometries)) {
+                                    foundLight = true;
+                                }
                             }
                         }
-                        case 1 -> {
-                            float length = indirect.randomLightDirection.length();
-                            if (!Geometry.fastTestRay(indirect.bouncePosition, indirect.randomLightDirection.div(length), length, this.geometries)) {
-                                foundLight = true;
-                            }
+
+                        if (foundLight) {
+                            break;
                         }
-                    }
-                    
-                    if (foundLight) {
-                        calculateDirect(indirect.bouncePosition, indirect.smoothNormal, indirect.lightColor);
-                        break;
                     }
                 }
 
@@ -1111,6 +1136,9 @@ public class BakedLighting {
                 float nz = closestRay.lerp(indirect.bounceWeights, MeshData.N_XYZ_OFFSET + 2);
 
                 indirect.smoothNormal.set(nx, ny, nz).normalize();
+                if (!indirect.smoothNormal.isFinite()) {
+                    indirect.smoothNormal.set(closestRay.getTriangleNormal());
+                }
 
                 SoftwareTexture rayTexture = this.sceneTextures.get(closestRay.getGeometry().getMesh().getTextureHint());
                 rayTexture.sampleNearest(u, v, indirect.bounceColor, 0);

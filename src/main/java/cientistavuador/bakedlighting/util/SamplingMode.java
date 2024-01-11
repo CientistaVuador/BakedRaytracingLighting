@@ -32,19 +32,15 @@ package cientistavuador.bakedlighting.util;
  */
 public enum SamplingMode {
     SAMPLE_1(SamplingModeLoader.SAMPLES.get("1.png")),
-    SAMPLE_2(SamplingModeLoader.SAMPLES.get("2.png")),
     SAMPLE_3(SamplingModeLoader.SAMPLES.get("3.png")),
     SAMPLE_4(SamplingModeLoader.SAMPLES.get("4.png")),
     SAMPLE_5(SamplingModeLoader.SAMPLES.get("5.png")),
-    SAMPLE_6(SamplingModeLoader.SAMPLES.get("6.png")),
     SAMPLE_7(SamplingModeLoader.SAMPLES.get("7.png")),
     SAMPLE_8(SamplingModeLoader.SAMPLES.get("8.png")),
     SAMPLE_9(SamplingModeLoader.SAMPLES.get("9.png")),
-    SAMPLE_10(SamplingModeLoader.SAMPLES.get("10.png")),
     SAMPLE_11(SamplingModeLoader.SAMPLES.get("11.png")),
     SAMPLE_12(SamplingModeLoader.SAMPLES.get("12.png")),
     SAMPLE_13(SamplingModeLoader.SAMPLES.get("13.png")),
-    SAMPLE_14(SamplingModeLoader.SAMPLES.get("14.png")),
     SAMPLE_15(SamplingModeLoader.SAMPLES.get("15.png")),
     SAMPLE_16(SamplingModeLoader.SAMPLES.get("16.png")),
     ;

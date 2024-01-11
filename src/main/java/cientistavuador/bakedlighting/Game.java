@@ -113,6 +113,26 @@ public class Game {
                 .scale(0.10f);
 
         ciencola.setModel(matrix);
+        
+        ciencola = new Geometry(Geometries.CIENCOLA);
+        this.scene.getGeometries().add(ciencola);
+
+        matrix = new Matrix4f()
+                .translate(5.5f, 1f, 0f)
+                .scale(1f, 1.2f, 1f)
+                ;
+
+        ciencola.setModel(matrix);
+        
+        ciencola = new Geometry(Geometries.CIENCOLA);
+        this.scene.getGeometries().add(ciencola);
+
+        matrix = new Matrix4f()
+                .translate(-5.5f, 1f, 0f)
+                .scale(1f, 1.2f, 1f)
+                ;
+
+        ciencola.setModel(matrix);
 
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
@@ -121,19 +141,31 @@ public class Game {
         this.scene.setIndirectLightingBlurArea(4f);
         this.scene.setShadowBlurArea(1.2f);
 
-        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_9);
         
         this.scene.setFastModeEnabled(false);
         
         Scene.PointLight point = new Scene.PointLight();
         point.setPosition(0f, 2f, 6f);
-        point.setDiffuse(20f, 20f, 20f);
+        point.setDiffuse(2f, 2f, 2f);
         point.setLightSize(0.2f);
         this.scene.getLights().add(point);
         
+        Scene.SpotLight spot0 = new Scene.SpotLight();
+        spot0.setPosition(-5.9f, 3.5f, 0);
+        spot0.setDiffuse(2f, 2f, 2f);
+        spot0.setLightSize(0.2f);
+        this.scene.getLights().add(spot0);
+        
+        Scene.SpotLight spot1 = new Scene.SpotLight();
+        spot1.setPosition(5.9f, 3.5f, 0);
+        spot1.setDiffuse(2f, 2f, 2f);
+        spot1.setLightSize(0.2f);
+        this.scene.getLights().add(spot1);
+        
         Scene.DirectionalLight sun = new Scene.DirectionalLight();
-        //this.scene.getLights().add(sun);
-
+        this.scene.getLights().add(sun);
+        
         /*float[] ciencolaVertices = e.getMesh().getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
         ciencolaVertices,
@@ -333,7 +365,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1f / 0.05f);
+                this.status = BakedLighting.bake(this.scene, 1f / 0.1f);
             }
         }
     }
