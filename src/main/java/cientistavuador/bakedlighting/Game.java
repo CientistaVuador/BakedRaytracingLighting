@@ -30,7 +30,6 @@ import cientistavuador.bakedlighting.camera.FreeCamera;
 import cientistavuador.bakedlighting.debug.AabRender;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
-import cientistavuador.bakedlighting.geometry.GeometriesLoader;
 import cientistavuador.bakedlighting.geometry.Geometry;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
@@ -67,11 +66,80 @@ public class Game {
     private final FreeCamera camera = new FreeCamera();
     private final List<RayResult> rays = new ArrayList<>();
     private final Scene scene = new Scene();
+    private final BakedLighting.BakedLightingOutput writeToTexture = new BakedLighting.BakedLightingOutput() {
+        private Geometry geometry = null;
+        private MeshData.LightmapMesh mesh = null;
+        private int lightmapSize = 0;
 
+        @Override
+        public void prepare(Geometry geometry, MeshData.LightmapMesh mesh, int lightmapSize, String[] groups) {
+            this.geometry = geometry;
+            this.mesh = mesh;
+            this.lightmapSize = lightmapSize;
+        }
+
+        @Override
+        public void write(float[] lightmap, int groupIndex) {
+            int texture = glGenTextures();
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture);
+
+            Game.this.memoryUsage += this.lightmapSize * this.lightmapSize * 4;
+            glTexImage2D(
+                    GL_TEXTURE_2D, 0,
+                    GL_RGB9_E5, this.lightmapSize, this.lightmapSize,
+                    0,
+                    GL_RGB, GL_FLOAT, lightmap
+            );
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+            glBindTexture(GL_TEXTURE_2D, 0);
+            
+            this.geometry.setLightmapTextureHint(texture);
+            this.geometry.setLightmapMesh(this.mesh);
+        }
+    };
+    
+    private long memoryUsage = 0;
     private BakedLighting.Status status = BakedLighting.dummyStatus();
 
     private Game() {
 
+    }
+
+    public String getMemoryUsageFormatted() {
+        int unit = 0;
+        long memory = this.memoryUsage;
+        for (int i = 0; i < Integer.MAX_VALUE; i++) {
+            memory /= 1000;
+            if (memory > 0) {
+                unit++;
+            } else {
+                break;
+            }
+        }
+        memory = this.memoryUsage;
+        String value = String.format("%.2f", memory / Math.pow(1000.0, unit));
+        switch (unit) {
+            case 0 ->
+                value += " B";
+            case 1 ->
+                value += " KB";
+            case 2 ->
+                value += " MB";
+            case 3 ->
+                value += " GB";
+            case 4 ->
+                value += " TB";
+            default ->
+                value += " * " + Math.pow(1000.0, unit) + " B";
+        }
+        return value;
     }
 
     public void start() {
@@ -113,59 +181,57 @@ public class Game {
                 .scale(0.10f);
 
         ciencola.setModel(matrix);
-        
+
         ciencola = new Geometry(Geometries.CIENCOLA);
         this.scene.getGeometries().add(ciencola);
 
         matrix = new Matrix4f()
                 .translate(5.5f, 1f, 0f)
-                .scale(1f, 1.2f, 1f)
-                ;
+                .scale(1f, 1.2f, 1f);
 
         ciencola.setModel(matrix);
-        
+
         ciencola = new Geometry(Geometries.CIENCOLA);
         this.scene.getGeometries().add(ciencola);
 
         matrix = new Matrix4f()
                 .translate(-5.5f, 1f, 0f)
-                .scale(1f, 1.2f, 1f)
-                ;
+                .scale(1f, 1.2f, 1f);
 
         ciencola.setModel(matrix);
 
         this.scene.setIndirectLightingEnabled(true);
         this.scene.setDirectLightingEnabled(true);
         this.scene.setShadowsEnabled(true);
-        
+
         this.scene.setIndirectLightingBlurArea(4f);
         this.scene.setShadowBlurArea(1.2f);
 
-        this.scene.setSamplingMode(SamplingMode.SAMPLE_9);
-        
+        this.scene.setSamplingMode(SamplingMode.SAMPLE_16);
+
         this.scene.setFastModeEnabled(false);
-        
+
         Scene.PointLight point = new Scene.PointLight();
         point.setPosition(0f, 2f, 6f);
         point.setDiffuse(2f, 2f, 2f);
         point.setLightSize(0.2f);
         this.scene.getLights().add(point);
-        
+
         Scene.SpotLight spot0 = new Scene.SpotLight();
         spot0.setPosition(-5.9f, 3.5f, 0);
         spot0.setDiffuse(2f, 2f, 2f);
         spot0.setLightSize(0.2f);
         this.scene.getLights().add(spot0);
-        
+
         Scene.SpotLight spot1 = new Scene.SpotLight();
         spot1.setPosition(5.9f, 3.5f, 0);
         spot1.setDiffuse(2f, 2f, 2f);
         spot1.setLightSize(0.2f);
         this.scene.getLights().add(spot1);
-        
+
         Scene.DirectionalLight sun = new Scene.DirectionalLight();
         this.scene.getLights().add(sun);
-        
+
         /*float[] ciencolaVertices = e.getMesh().getVertices();
         LightmapUVs.GeneratorOutput output = LightmapUVs.generate(
         ciencolaVertices,
@@ -275,14 +341,14 @@ public class Game {
                 Matrix4f model = new Matrix4f();
                 model.translate(p.getPosition()).scale(p.getLightSize());
                 program.setModel(model);
-                
+
                 MeshData sphere = Geometries.SPHERE;
-                
+
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, sphere.getTextureHint());
                 glActiveTexture(GL_TEXTURE1);
                 glBindTexture(GL_TEXTURE_2D, sphere.getTextureHint());
-                
+
                 glBindVertexArray(Geometries.SPHERE.getVAO());
                 sphere.render();
                 glBindVertexArray(0);
@@ -297,9 +363,9 @@ public class Game {
             new StringBuilder()
             .append("R - Bake Lightmap\n")
             .append(this.status.getASCIIProgressBar()).append('\n')
-            .append("Status: ").append(this.status.getCurrentStatus()).append('\n')
+            .append(this.status.getCurrentStatus()).append('\n')
             .append(this.status.getRaysPerSecondFormatted()).append('\n')
-            .append("Video Memory Used By Lightmaps: ").append(this.status.getMemoryUsageFormatted()).append('\n')
+            .append("Video Memory Used By Lightmaps: ").append(getMemoryUsageFormatted()).append('\n')
             .append("FPS: ").append(Main.FPS).append('\n')
             .append("Estimated Time: ").append(this.status.getEstimatedTimeFormatted()).append("\n")
             .toString()
@@ -365,7 +431,7 @@ public class Game {
                         geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
                     }
                 }
-                this.status = BakedLighting.bake(this.scene, 1f / 0.1f);
+                this.status = BakedLighting.bake(this.writeToTexture, this.scene, 1f / 0.1f);
             }
         }
     }

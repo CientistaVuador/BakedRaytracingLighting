@@ -40,10 +40,11 @@ public class Scene {
 
     public static class Light {
 
-        private final Vector3f diffuse = new Vector3f(1.3f, 1.3f, 1.3f);
+        private final Vector3f diffuse = new Vector3f(2f, 2f, 2f);
         
         private float lightSize = 0.02f;
-
+        private String groupName = "";
+        
         protected Light() {
 
         }
@@ -70,6 +71,17 @@ public class Scene {
         
         public float getLuminance() {
             return getDiffuse().length();
+        }
+
+        public String getGroupName() {
+            return groupName;
+        }
+
+        public void setGroupName(String groupName) {
+            if (groupName == null) {
+                groupName = "";
+            }
+            this.groupName = groupName;
         }
         
     }
@@ -209,7 +221,7 @@ public class Scene {
     private SamplingMode samplingMode = SamplingMode.SAMPLE_5;
 
     private boolean directLightingEnabled = true;
-    private float directLightingAttenuationDistance = 0.75f;
+    private float directLightingAttenuation = 0.75f;
 
     private boolean shadowsEnabled = true;
     private int shadowRaysPerSample = 12;
@@ -342,12 +354,12 @@ public class Scene {
         return fillEmptyValuesWithLightColors;
     }
 
-    public float getDirectLightingAttenuationDistance() {
-        return directLightingAttenuationDistance;
+    public float getDirectLightingAttenuation() {
+        return directLightingAttenuation;
     }
 
-    public void setDirectLightingAttenuationDistance(float directLightingAttenuationDistance) {
-        this.directLightingAttenuationDistance = directLightingAttenuationDistance;
+    public void setDirectLightingAttenuation(float directLightingAttenuation) {
+        this.directLightingAttenuation = directLightingAttenuation;
     }
 
 }
