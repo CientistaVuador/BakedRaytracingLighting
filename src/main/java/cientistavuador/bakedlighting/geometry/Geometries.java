@@ -62,7 +62,7 @@ public class Geometries {
         CIENCOLA = ciencola;
         
         MeshData debugSphere = meshes.get("sphere.obj");
-        debugSphere.setTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
+        debugSphere.setTextureHint(Textures.WHITE_TEXTURE);
         SPHERE = debugSphere;
     }
     

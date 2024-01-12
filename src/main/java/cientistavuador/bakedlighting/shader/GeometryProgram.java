@@ -48,6 +48,7 @@ import static org.lwjgl.opengl.GL33C.*;
 public class GeometryProgram {
 
     public static final int MAX_AMOUNT_OF_LIGHTS = 8;
+    public static final int MAX_AMOUNT_OF_BAKED_LIGHT_GROUPS = 64;
 
     public static class PointLight {
 
@@ -196,7 +197,7 @@ public class GeometryProgram {
             uniform mat4 model;
             uniform mat3 normalModel;
             
-            uniform sampler2D lightmap;
+            uniform sampler2DArray lightmap;
             
             layout (location = 0) in vec3 vertexPosition;
             layout (location = 1) in vec2 vertexUv;
@@ -209,6 +210,7 @@ public class GeometryProgram {
             out vec3 linearNormal;
             out vec3 linearTangent;
             out vec2 lightmapUv;
+            flat out int lightmapLength;
             
             void main() {
                 vec4 pos = model * vec4(vertexPosition, 1.0);
@@ -218,11 +220,12 @@ public class GeometryProgram {
                 linearNormal = normalize(normalModel * vertexNormal);
                 linearTangent = normalize(normalModel * vertexTangent);
                 lightmapUv = vertexLightmapUv;
+                lightmapLength = textureSize(lightmap, 0).z;
                 
                 gl_Position = projectionView * pos;
             }
             """,
-             """
+            """
             #version 330 core
             
             struct PointLight {
@@ -234,7 +237,7 @@ public class GeometryProgram {
             
             uniform vec4 color;
             uniform sampler2D tex;
-            uniform sampler2D lightmap;
+            uniform sampler2DArray lightmap;
             
             uniform bool lightingEnabled;
             
@@ -243,12 +246,14 @@ public class GeometryProgram {
             uniform vec3 sunDiffuse;
             
             uniform PointLight lights[MAX_AMOUNT_OF_LIGHTS];
+            uniform float bakedLightGroups[MAX_AMOUNT_OF_BAKED_LIGHT_GROUPS];
             
             in vec3 position;
             in vec2 uv;
             in vec3 linearNormal;
             in vec3 linearTangent;
             in vec2 lightmapUv;
+            flat in int lightmapLength;
             
             layout (location = 0) out vec4 colorOutput;
             
@@ -258,7 +263,10 @@ public class GeometryProgram {
                 vec3 normal = normalize(linearNormal);
                 vec3 tangent = normalize(linearTangent);
                 
-                vec4 lightmapColor = texture(lightmap, lightmapUv);
+                vec3 lightmapColor = vec3(0.0);
+                for (int i = 0; i < lightmapLength; i++) {
+                    lightmapColor += texture(lightmap, vec3(lightmapUv, float(i))).rgb * bakedLightGroups[i];
+                }
                 vec4 textureColor = texture(tex, uv);
                 
                 textureColor = vec4(pow(textureColor.rgb * color.rgb, vec3(gamma)), textureColor.a * color.a);
@@ -291,6 +299,7 @@ public class GeometryProgram {
             new HashMap<>() {
         {
             put("MAX_AMOUNT_OF_LIGHTS", Integer.toString(MAX_AMOUNT_OF_LIGHTS));
+            put("MAX_AMOUNT_OF_BAKED_LIGHT_GROUPS", Integer.toString(MAX_AMOUNT_OF_BAKED_LIGHT_GROUPS));
         }
     }
     );
@@ -314,9 +323,15 @@ public class GeometryProgram {
     private final PointLightUniforms[] lightsUniforms = new PointLightUniforms[MAX_AMOUNT_OF_LIGHTS];
     private final List<PointLight> lights = new ArrayList<>();
 
+    private final float[] bakedLightGroupsIntensity = new float[MAX_AMOUNT_OF_BAKED_LIGHT_GROUPS];
+    private boolean requiresBakedUpdate = true;
+
     private GeometryProgram() {
         for (int i = 0; i < this.lightsUniforms.length; i++) {
             this.lightsUniforms[i] = new PointLightUniforms(i);
+        }
+        for (int i = 0; i < this.bakedLightGroupsIntensity.length; i++) {
+            this.bakedLightGroupsIntensity[i] = 1f;
         }
     }
 
@@ -363,7 +378,19 @@ public class GeometryProgram {
     public int getLightmapTextureUnit() {
         return lightmapTextureUnit;
     }
-
+    
+    public float getBakedLightGroupIntensity(int index) {
+        return this.bakedLightGroupsIntensity[index];
+    }
+    
+    public void setBakedLightGroupIntensity(int index, float intensity) {
+        float otherIntensity = this.bakedLightGroupsIntensity[index];
+        if (intensity != otherIntensity) {
+            this.bakedLightGroupsIntensity[index] = intensity;
+            this.requiresBakedUpdate = true;
+        }
+    }
+    
     public void updateLightsUniforms() {
         int uniformsIndex = 0;
         int lightsIndex = 0;
@@ -393,6 +420,14 @@ public class GeometryProgram {
         for (PointLightUniforms p : this.lightsUniforms) {
             p.updateUniforms();
         }
+
+        if (this.requiresBakedUpdate) {
+            for (int i = 0; i < this.bakedLightGroupsIntensity.length; i++) {
+                glUniform1f(UNIFORMS.locationOf("bakedLightGroups["+i+"]"), this.bakedLightGroupsIntensity[i]);
+            }
+            this.requiresBakedUpdate = false;
+        }
+
     }
 
     public boolean isLightingEnabled() {

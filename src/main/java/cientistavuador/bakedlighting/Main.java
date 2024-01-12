@@ -148,7 +148,17 @@ public class Main {
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     }
-
+    
+    public static boolean isSupported(int major, int minor) {
+        if (Main.OPENGL_MAJOR_VERSION > major) {
+            return true;
+        }
+        if (Main.OPENGL_MAJOR_VERSION < major) {
+            return false;
+        }
+        return Main.OPENGL_MINOR_VERSION >= minor;
+    }
+    
     public static class OpenGLErrorException extends RuntimeException {
 
         private static final long serialVersionUID = 1L;

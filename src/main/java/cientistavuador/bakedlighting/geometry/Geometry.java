@@ -123,7 +123,7 @@ public class Geometry {
     private final Matrix3f normalModel = new Matrix3f();
     private final Matrix3f inverseNormalModel = new Matrix3f();
 
-    private int lightmapTextureHint = Textures.EMPTY_LIGHTMAP_TEXTURE;
+    private int lightmapTextureHint = Textures.EMPTY_LIGHTMAP;
     private MeshData.LightmapMesh lightmapMesh = null;
 
     private float lightmapScale = 1f;

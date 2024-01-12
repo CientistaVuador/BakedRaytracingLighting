@@ -50,6 +50,7 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL33C.*;
+import org.lwjgl.opengl.GL42C;
 
 /**
  *
@@ -70,43 +71,66 @@ public class Game {
         private Geometry geometry = null;
         private MeshData.LightmapMesh mesh = null;
         private int lightmapSize = 0;
+        private String[] groups = null;
+        private int texture = 0;
+        private int count = 0;
 
         @Override
         public void prepare(Geometry geometry, MeshData.LightmapMesh mesh, int lightmapSize, String[] groups) {
             this.geometry = geometry;
             this.mesh = mesh;
             this.lightmapSize = lightmapSize;
+            this.groups = groups;
+            this.count = groups.length;
+
+            this.texture = glGenTextures();
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, this.texture);
+
+            if (Main.isSupported(4, 2)) {
+                GL42C.glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, GL_RGB9_E5, this.lightmapSize, this.lightmapSize, this.groups.length);
+            } else {
+                glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGB9_E5, this.lightmapSize, this.lightmapSize, this.groups.length, 0, GL_RGBA, GL_FLOAT, 0);
+            }
+
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            
+            Game.this.memoryUsage += this.lightmapSize * this.lightmapSize * 4 * this.groups.length;
         }
 
         @Override
         public void write(float[] lightmap, int groupIndex) {
-            int texture = glGenTextures();
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, texture);
-
-            Game.this.memoryUsage += this.lightmapSize * this.lightmapSize * 4;
-            glTexImage2D(
-                    GL_TEXTURE_2D, 0,
-                    GL_RGB9_E5, this.lightmapSize, this.lightmapSize,
-                    0,
-                    GL_RGB, GL_FLOAT, lightmap
-            );
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-            glBindTexture(GL_TEXTURE_2D, 0);
+            glBindTexture(GL_TEXTURE_2D_ARRAY, this.texture);
             
-            this.geometry.setLightmapTextureHint(texture);
-            this.geometry.setLightmapMesh(this.mesh);
+            glTexSubImage3D(
+                    GL_TEXTURE_2D_ARRAY, 0,
+                    0, 0, groupIndex,
+                    this.lightmapSize, this.lightmapSize, 1,
+                    GL_RGB, GL_FLOAT, lightmap);
+            
+            glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+            
+            this.count--;
+            if (this.count == 0) {
+                this.geometry.setLightmapTextureHint(texture);
+                this.geometry.setLightmapMesh(this.mesh);
+            }
         }
     };
-    
+
     private long memoryUsage = 0;
     private BakedLighting.Status status = BakedLighting.dummyStatus();
+    private float interiorIntensity = 1f;
+    private float sunIntensity = 1f;
+    private boolean interiorEnabled = true;
+    private boolean sunEnabled = true;
 
     private Game() {
 
@@ -215,21 +239,25 @@ public class Game {
         point.setPosition(0f, 2f, 6f);
         point.setDiffuse(2f, 2f, 2f);
         point.setLightSize(0.2f);
+        point.setGroupName("interior");
         this.scene.getLights().add(point);
 
         Scene.SpotLight spot0 = new Scene.SpotLight();
         spot0.setPosition(-5.9f, 3.5f, 0);
         spot0.setDiffuse(2f, 2f, 2f);
         spot0.setLightSize(0.2f);
+        spot0.setGroupName("interior");
         this.scene.getLights().add(spot0);
 
         Scene.SpotLight spot1 = new Scene.SpotLight();
         spot1.setPosition(5.9f, 3.5f, 0);
         spot1.setDiffuse(2f, 2f, 2f);
         spot1.setLightSize(0.2f);
+        spot1.setGroupName("interior");
         this.scene.getLights().add(spot1);
 
         Scene.DirectionalLight sun = new Scene.DirectionalLight();
+        sun.setGroupName("sun");
         this.scene.getLights().add(sun);
 
         /*float[] ciencolaVertices = e.getMesh().getVertices();
@@ -294,6 +322,26 @@ public class Game {
                 throw new RuntimeException(ex);
             }
         }
+        
+        float speed = 1f;
+        
+        if (this.interiorEnabled) {
+            this.interiorIntensity += Main.TPF * speed;
+        } else {
+            this.interiorIntensity -= Main.TPF * speed;
+        }
+        
+        if (this.sunEnabled) {
+            this.sunIntensity += Main.TPF * speed;
+        } else {
+            this.sunIntensity -= Main.TPF * speed;
+        }
+        
+        this.interiorIntensity = Math.min(Math.max(this.interiorIntensity, 0f), 1f);
+        this.sunIntensity = Math.min(Math.max(this.sunIntensity, 0f), 1f);
+        
+        GeometryProgram.INSTANCE.setBakedLightGroupIntensity(0, this.interiorIntensity);
+        GeometryProgram.INSTANCE.setBakedLightGroupIntensity(1, this.sunIntensity);
 
         camera.updateMovement();
         camera.updateUBO();
@@ -302,6 +350,7 @@ public class Game {
 
         GeometryProgram program = GeometryProgram.INSTANCE;
         program.use();
+        program.updateLightsUniforms();
         program.setProjectionView(cameraProjectionView);
         program.setTextureUnit(0);
         program.setLightmapTextureUnit(1);
@@ -311,7 +360,7 @@ public class Game {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, geo.getMesh().getTextureHint());
             glActiveTexture(GL_TEXTURE1);
-            glBindTexture(GL_TEXTURE_2D, geo.getLightmapTextureHint());
+            glBindTexture(GL_TEXTURE_2D_ARRAY, geo.getLightmapTextureHint());
             program.setModel(geo.getModel());
 
             MeshData mesh = geo.getMesh();
@@ -347,7 +396,7 @@ public class Game {
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, sphere.getTextureHint());
                 glActiveTexture(GL_TEXTURE1);
-                glBindTexture(GL_TEXTURE_2D, sphere.getTextureHint());
+                glBindTexture(GL_TEXTURE_2D_ARRAY, Textures.EMPTY_LIGHTMAP);
 
                 glBindVertexArray(Geometries.SPHERE.getVAO());
                 sphere.render();
@@ -426,13 +475,19 @@ public class Game {
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
             if (this.status.isDone()) {
                 for (Geometry geo : this.scene.getGeometries()) {
-                    if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP_TEXTURE) {
+                    if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP) {
                         glDeleteTextures(geo.getLightmapTextureHint());
-                        geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP_TEXTURE);
+                        geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP);
                     }
                 }
                 this.status = BakedLighting.bake(this.writeToTexture, this.scene, 1f / 0.1f);
             }
+        }
+        if (key == GLFW_KEY_I && action == GLFW_PRESS) {
+            this.interiorEnabled = !this.interiorEnabled;
+        }
+        if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+            this.sunEnabled = !this.sunEnabled;
         }
     }
 

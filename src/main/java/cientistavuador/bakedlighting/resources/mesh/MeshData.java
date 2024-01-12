@@ -222,7 +222,7 @@ public class MeshData {
     private int vao = 0;
     private int ebo = 0;
     private int vbo = 0;
-    private int textureHint = Textures.EMPTY_TEXTURE;
+    private int textureHint = Textures.ERROR_TEXTURE;
 
     public MeshData(String name, float[] vertices, int[] indices, boolean addLightmapSupport) {
         this.name = name;
