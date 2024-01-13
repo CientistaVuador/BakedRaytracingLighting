@@ -42,6 +42,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
 import java.nio.DoubleBuffer;
+import java.nio.IntBuffer;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.joml.Vector3f;
 import static org.lwjgl.glfw.GLFW.*;
@@ -92,7 +93,7 @@ public class Main {
         };
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-        
+
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
@@ -126,7 +127,7 @@ public class Main {
             System.out.println("WARNING: RUNNING ON INCOMPATIBLE HARDWARE! GAME MAY CRASH!");
             compatible = false;
         }
-        
+
         COMPATIBLE_MODE = compatible;
 
         glfwMakeContextCurrent(dummyWindow);
@@ -148,7 +149,7 @@ public class Main {
 
         glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     }
-    
+
     public static boolean isSupported(int major, int minor) {
         if (Main.OPENGL_MAJOR_VERSION > major) {
             return true;
@@ -158,7 +159,7 @@ public class Main {
         }
         return Main.OPENGL_MINOR_VERSION >= minor;
     }
-    
+
     public static class OpenGLErrorException extends RuntimeException {
 
         private static final long serialVersionUID = 1L;
@@ -200,6 +201,10 @@ public class Main {
     public static String WINDOW_TITLE = "CienCraft - FPS: 60";
     public static int WIDTH = 800;
     public static int HEIGHT = 600;
+    public static int WINDOW_X = 0;
+    public static int WINDOW_Y = 0;
+    public static int WINDOW_WIDTH = WIDTH;
+    public static int WINDOW_HEIGHT = HEIGHT;
     public static double TPF = 1 / 60d;
     public static int FPS = 60;
     public static long WINDOW_POINTER = NULL;
@@ -300,7 +305,7 @@ public class Main {
         }
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, OPENGL_MAJOR_VERSION);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, OPENGL_MINOR_VERSION);
-        
+
         if (COMPATIBLE_MODE) {
             glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
             glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -566,6 +571,19 @@ public class Main {
                 Main.MOUSE_Y = (float) mY;
             }
 
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                IntBuffer windowX = stack.mallocInt(1);
+                IntBuffer windowY = stack.mallocInt(1);
+                IntBuffer windowWidth = stack.mallocInt(1);
+                IntBuffer windowHeight = stack.mallocInt(1);
+                glfwGetWindowPos(Main.WINDOW_POINTER, windowX, windowY);
+                glfwGetWindowSize(Main.WINDOW_POINTER, windowWidth, windowHeight);
+                WINDOW_X = windowX.get();
+                WINDOW_Y = windowY.get();
+                WINDOW_WIDTH = windowWidth.get();
+                WINDOW_HEIGHT = windowHeight.get();
+            }
+            
             glfwPollEvents();
             glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 

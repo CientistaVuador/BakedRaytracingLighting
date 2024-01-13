@@ -26,31 +26,39 @@
  */
 package cientistavuador.bakedlighting.util;
 
+import java.awt.image.BufferedImage;
+
 /**
  *
  * @author Cien
  */
 public enum SamplingMode {
-    SAMPLE_1(SamplingModeLoader.SAMPLES.get("1.png")),
-    SAMPLE_3(SamplingModeLoader.SAMPLES.get("3.png")),
-    SAMPLE_4(SamplingModeLoader.SAMPLES.get("4.png")),
-    SAMPLE_5(SamplingModeLoader.SAMPLES.get("5.png")),
-    SAMPLE_7(SamplingModeLoader.SAMPLES.get("7.png")),
-    SAMPLE_8(SamplingModeLoader.SAMPLES.get("8.png")),
-    SAMPLE_9(SamplingModeLoader.SAMPLES.get("9.png")),
-    SAMPLE_11(SamplingModeLoader.SAMPLES.get("11.png")),
-    SAMPLE_12(SamplingModeLoader.SAMPLES.get("12.png")),
-    SAMPLE_13(SamplingModeLoader.SAMPLES.get("13.png")),
-    SAMPLE_15(SamplingModeLoader.SAMPLES.get("15.png")),
-    SAMPLE_16(SamplingModeLoader.SAMPLES.get("16.png")),
+    SAMPLE_1(SamplingModeLoader.SAMPLES.get("1.png"), SamplingModeLoader.SAMPLES_IMAGES.get("1.png")),
+    SAMPLE_3(SamplingModeLoader.SAMPLES.get("3.png"), SamplingModeLoader.SAMPLES_IMAGES.get("3.png")),
+    SAMPLE_4(SamplingModeLoader.SAMPLES.get("4.png"), SamplingModeLoader.SAMPLES_IMAGES.get("4.png")),
+    SAMPLE_5(SamplingModeLoader.SAMPLES.get("5.png"), SamplingModeLoader.SAMPLES_IMAGES.get("5.png")),
+    SAMPLE_7(SamplingModeLoader.SAMPLES.get("7.png"), SamplingModeLoader.SAMPLES_IMAGES.get("7.png")),
+    SAMPLE_8(SamplingModeLoader.SAMPLES.get("8.png"), SamplingModeLoader.SAMPLES_IMAGES.get("8.png")),
+    SAMPLE_9(SamplingModeLoader.SAMPLES.get("9.png"), SamplingModeLoader.SAMPLES_IMAGES.get("9.png")),
+    SAMPLE_11(SamplingModeLoader.SAMPLES.get("11.png"), SamplingModeLoader.SAMPLES_IMAGES.get("11.png")),
+    SAMPLE_12(SamplingModeLoader.SAMPLES.get("12.png"), SamplingModeLoader.SAMPLES_IMAGES.get("12.png")),
+    SAMPLE_13(SamplingModeLoader.SAMPLES.get("13.png"), SamplingModeLoader.SAMPLES_IMAGES.get("13.png")),
+    SAMPLE_15(SamplingModeLoader.SAMPLES.get("15.png"), SamplingModeLoader.SAMPLES_IMAGES.get("15.png")),
+    SAMPLE_16(SamplingModeLoader.SAMPLES.get("16.png"), SamplingModeLoader.SAMPLES_IMAGES.get("16.png")),
     ;
     
     private final float[] sampleLocations;
+    private final BufferedImage image;
 
-    private SamplingMode(float[] sampleLocations) {
+    private SamplingMode(float[] sampleLocations, BufferedImage image) {
         this.sampleLocations = sampleLocations;
+        this.image = image;
     }
 
+    public BufferedImage image() {
+        return image;
+    }
+    
     public int numSamples() {
         return this.sampleLocations.length / 2;
     }
@@ -61,6 +69,15 @@ public enum SamplingMode {
 
     public float sampleY(int sample) {
         return this.sampleLocations[(sample * 2) + 1];
+    }
+
+    @Override
+    public String toString() {
+        int samples = numSamples();
+        if (samples == 1) {
+            return samples+" Sample";
+        }
+        return samples+" Samples";
     }
     
 }

@@ -31,6 +31,7 @@ import cientistavuador.bakedlighting.debug.AabRender;
 import cientistavuador.bakedlighting.debug.LineRender;
 import cientistavuador.bakedlighting.geometry.Geometries;
 import cientistavuador.bakedlighting.geometry.Geometry;
+import cientistavuador.bakedlighting.popups.BakePopup;
 import cientistavuador.bakedlighting.resources.mesh.MeshData;
 import cientistavuador.bakedlighting.shader.GeometryProgram;
 import cientistavuador.bakedlighting.text.GLFontRenderer;
@@ -43,6 +44,7 @@ import cientistavuador.bakedlighting.util.BakedLighting;
 import cientistavuador.bakedlighting.util.RayResult;
 import cientistavuador.bakedlighting.util.SamplingMode;
 import cientistavuador.bakedlighting.util.Scene;
+import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -100,7 +102,7 @@ public class Game {
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-            
+
             Game.this.memoryUsage += this.lightmapSize * this.lightmapSize * 4 * this.groups.length;
         }
 
@@ -108,15 +110,15 @@ public class Game {
         public void write(float[] lightmap, int groupIndex) {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D_ARRAY, this.texture);
-            
+
             glTexSubImage3D(
                     GL_TEXTURE_2D_ARRAY, 0,
                     0, 0, groupIndex,
                     this.lightmapSize, this.lightmapSize, 1,
                     GL_RGB, GL_FLOAT, lightmap);
-            
+
             glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
-            
+
             this.count--;
             if (this.count == 0) {
                 this.geometry.setLightmapTextureHint(texture);
@@ -131,6 +133,8 @@ public class Game {
     private float sunIntensity = 1f;
     private boolean interiorEnabled = true;
     private boolean sunEnabled = true;
+
+    private boolean bakeWindowOpen = false;
 
     private Game() {
 
@@ -322,24 +326,24 @@ public class Game {
                 throw new RuntimeException(ex);
             }
         }
-        
+
         float speed = 1f;
-        
+
         if (this.interiorEnabled) {
             this.interiorIntensity += Main.TPF * speed;
         } else {
             this.interiorIntensity -= Main.TPF * speed;
         }
-        
+
         if (this.sunEnabled) {
             this.sunIntensity += Main.TPF * speed;
         } else {
             this.sunIntensity -= Main.TPF * speed;
         }
-        
+
         this.interiorIntensity = Math.min(Math.max(this.interiorIntensity, 0f), 1f);
         this.sunIntensity = Math.min(Math.max(this.sunIntensity, 0f), 1f);
-        
+
         GeometryProgram.INSTANCE.setBakedLightGroupIntensity(0, this.interiorIntensity);
         GeometryProgram.INSTANCE.setBakedLightGroupIntensity(1, this.sunIntensity);
 
@@ -426,6 +430,76 @@ public class Game {
         Main.WINDOW_TITLE += " (x:" + (int) Math.floor(camera.getPosition().x()) + ",y:" + (int) Math.floor(camera.getPosition().y()) + ",z:" + (int) Math.ceil(camera.getPosition().z()) + ")";
     }
 
+    public void bakePopupCallback(BakePopup popup) {
+        if (!this.status.isDone()) {
+            return;
+        }
+        
+        for (Geometry geo : this.scene.getGeometries()) {
+            if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP) {
+                glDeleteTextures(geo.getLightmapTextureHint());
+                geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP);
+            }
+        }
+        this.memoryUsage = 0;
+
+        try {
+            //config
+            popup.getPixelToWorldRatio().commitEdit();
+            float pixelToWorldRatio = ((Number) popup.getPixelToWorldRatio().getValue()).floatValue();
+            SamplingMode samplingMode = (SamplingMode) popup.getSamplingMode().getSelectedItem();
+            popup.getRayOffset().commitEdit();
+            float rayOffset = ((Number) popup.getRayOffset().getValue()).floatValue();
+            boolean fillEmptyValues = popup.getFillEmptyValues().isSelected();
+            boolean fastMode = popup.getFastMode().isSelected();
+
+            this.scene.setSamplingMode(samplingMode);
+            this.scene.setRayOffset(rayOffset);
+            this.scene.setFillDisabledValuesWithLightColors(fillEmptyValues);
+            this.scene.setFastModeEnabled(fastMode);
+
+            //direct
+            boolean directEnabled = popup.getDirectLighting().isSelected();
+            popup.getDirectAttenuation().commitEdit();
+            float attenuation = ((Number) popup.getDirectAttenuation().getValue()).floatValue();
+
+            this.scene.setDirectLightingEnabled(directEnabled);
+            this.scene.setDirectLightingAttenuation(attenuation);
+
+            //shadows
+            boolean shadowsEnabled = popup.getShadows().isSelected();
+            popup.getShadowRays().commitEdit();
+            int shadowRays = ((Number) popup.getShadowRays().getValue()).intValue();
+            popup.getShadowBlur().commitEdit();
+            float shadowBlur = ((Number) popup.getShadowBlur().getValue()).floatValue();
+
+            this.scene.setShadowsEnabled(shadowsEnabled);
+            this.scene.setShadowRaysPerSample(shadowRays);
+            this.scene.setShadowBlurArea(shadowBlur);
+
+            //indirect
+            boolean indirectEnabled = popup.getIndirectLighting().isSelected();
+            popup.getIndirectRays().commitEdit();
+            int indirectRays = ((Number) popup.getIndirectRays().getValue()).intValue();
+            popup.getIndirectBounces().commitEdit();
+            int bounces = ((Number) popup.getIndirectBounces().getValue()).intValue();
+            popup.getIndirectBlur().commitEdit();
+            float indirectBlur = ((Number) popup.getIndirectBlur().getValue()).floatValue();
+            popup.getIndirectReflectionFactor().commitEdit();
+            float reflectionFactor = ((Number) popup.getIndirectReflectionFactor().getValue()).floatValue();
+
+            this.scene.setIndirectLightingEnabled(indirectEnabled);
+            this.scene.setIndirectRaysPerSample(indirectRays);
+            this.scene.setIndirectBounces(bounces);
+            this.scene.setIndirectLightingBlurArea(indirectBlur);
+            this.scene.setIndirectLightReflectionFactor(reflectionFactor);
+
+            this.status = BakedLighting.bake(this.writeToTexture, this.scene, pixelToWorldRatio);
+        } catch (ParseException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
     public void mouseCursorMoved(double x, double y) {
         camera.mouseCursorMoved(x, y);
     }
@@ -473,14 +547,18 @@ public class Game {
             }
         }
         if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-            if (this.status.isDone()) {
-                for (Geometry geo : this.scene.getGeometries()) {
-                    if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP) {
-                        glDeleteTextures(geo.getLightmapTextureHint());
-                        geo.setLightmapTextureHint(Textures.EMPTY_LIGHTMAP);
-                    }
+            if (!this.bakeWindowOpen) {
+                this.bakeWindowOpen = true;
+                BakePopup.show((t) -> {
+                    Main.MAIN_TASKS.add(() -> {
+                        Game.this.bakePopupCallback(t);
+                    });
+                }, (t) -> {
+                    this.bakeWindowOpen = false;
+                });
+                if (this.camera.isCaptureMouse()) {
+                    this.camera.pressEscape();
                 }
-                this.status = BakedLighting.bake(this.writeToTexture, this.scene, 1f / 0.1f);
             }
         }
         if (key == GLFW_KEY_I && action == GLFW_PRESS) {

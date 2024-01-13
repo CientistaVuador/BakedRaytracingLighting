@@ -55,13 +55,18 @@ public class FreeCamera extends PerspectiveCamera {
     //Movement control
     private boolean movementDisabled = false;
     
+    private boolean escapeOverride = false;
+    
     public FreeCamera() {
         
     }
     
     //movimentation magic
     public void updateMovement() {
-        if (isControlPressedOnce()) {
+        if (isControlPressedOnce() || this.escapeOverride) {
+            if (this.escapeOverride) {
+                this.escapeOverride = false;
+            }
             this.captureMouse = !this.captureMouse;
             // if true, disable cursor,
             // if false, set cursor to normal
@@ -189,6 +194,14 @@ public class FreeCamera extends PerspectiveCamera {
 
     public void setMovementDisabled(boolean movementDisabled) {
         this.movementDisabled = movementDisabled;
+    }
+
+    public boolean isCaptureMouse() {
+        return captureMouse;
+    }
+    
+    public void pressEscape() {
+        this.escapeOverride = true;
     }
     
 }

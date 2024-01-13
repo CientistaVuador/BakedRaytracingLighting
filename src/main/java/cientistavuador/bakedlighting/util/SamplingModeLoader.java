@@ -43,6 +43,7 @@ import javax.imageio.ImageIO;
  */
 public class SamplingModeLoader {
     protected static final Map<String, float[]> SAMPLES = new HashMap<>();
+    protected static final Map<String, BufferedImage> SAMPLES_IMAGES = new HashMap<>();
     
     static {
         try {
@@ -58,6 +59,7 @@ public class SamplingModeLoader {
                     BufferedImage image = ImageIO.read(zipRead);
                     float[] samples = load(image);
                     SAMPLES.put(entry.getName(), samples);
+                    SAMPLES_IMAGES.put(entry.getName(), image);
                 }
             }
         } catch (IOException ex) {

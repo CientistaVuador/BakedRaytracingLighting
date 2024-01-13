@@ -56,7 +56,7 @@ public class MeshData {
     public static final int T_XYZ_OFFSET = 0 + 3 + 2 + 3;
     public static final int L_UV_OFFSET = 0 + 3 + 2 + 3 + 3;
     
-    public static final float TOLERANCE = 0.00001f;
+    public static final float EPSILON = 0.00001f;
     
     private static void configureBoundVAO() {
         //position
@@ -362,10 +362,10 @@ public class MeshData {
         }
         synchronized (this.lightmapMeshes) {
             for (LightmapMesh m : this.lightmapMeshes) {
-                if (Math.abs(m.getPixelToWorldRatio() - pixelToWorldRatio) <= TOLERANCE
-                        && Math.abs(scaleX - m.getScaleX()) <= TOLERANCE
-                        && Math.abs(scaleY - m.getScaleY()) <= TOLERANCE
-                        && Math.abs(scaleZ - m.getScaleZ()) <= TOLERANCE
+                if (Math.abs(m.getPixelToWorldRatio() - pixelToWorldRatio) <= EPSILON
+                        && Math.abs(scaleX - m.getScaleX()) <= EPSILON
+                        && Math.abs(scaleY - m.getScaleY()) <= EPSILON
+                        && Math.abs(scaleZ - m.getScaleZ()) <= EPSILON
                         ) {
                     return m;
                 }

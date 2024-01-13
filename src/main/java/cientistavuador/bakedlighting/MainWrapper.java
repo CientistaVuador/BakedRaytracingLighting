@@ -28,15 +28,14 @@ package cientistavuador.bakedlighting;
 
 import cientistavuador.bakedlighting.natives.NativesExtractor;
 import cientistavuador.bakedlighting.sound.SoundSystem;
+import com.formdev.flatlaf.FlatDarkLaf;
 import java.awt.Toolkit;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.Locale;
+import javax.swing.JFrame;
 import javax.swing.JOptionPane;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
 import static org.lwjgl.glfw.GLFW.glfwTerminate;
 import static org.lwjgl.openal.ALC11.*;
 
@@ -47,6 +46,8 @@ import static org.lwjgl.openal.ALC11.*;
 public class MainWrapper {
 
     static {
+        Locale.setDefault(Locale.US);
+        
         System.out.println("  /$$$$$$  /$$        /$$$$$$  /$$");
         System.out.println(" /$$__  $$| $$       /$$__  $$| $$");
         System.out.println("| $$  \\ $$| $$      | $$  \\ $$| $$");
@@ -56,15 +57,11 @@ public class MainWrapper {
         System.out.println("|  $$$$$$/| $$$$$$$$| $$  | $$ /$$");
         System.out.println(" \\______/ |________/|__/  |__/|__/");
         
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException ex) {
-            Logger.getLogger(MainWrapper.class.getName()).log(Level.WARNING, "Native Look and Feel not supported.", ex);
-        }
+        FlatDarkLaf.setup();
 
         String osName = System.getProperty("os.name");
         System.out.println("Running on " + osName);
-        
+
         if (osName.contains("nix") || osName.contains("nux") || osName.contains("aix")) {
             NativesExtractor.extractLinux();
         } else if (osName.contains("mac")) {
@@ -79,23 +76,28 @@ public class MainWrapper {
         try {
             Main.main(args);
         } catch (Throwable e) {
-            //GLPool.destroy();
-            //glfwTerminate();
-
+            e.printStackTrace(System.out);
+            
+            Toolkit.getDefaultToolkit().beep();
+            
+            JFrame dummyFrame = new JFrame("dummy frame");
+            dummyFrame.setLocationRelativeTo(null);
+            dummyFrame.setVisible(true);
+            dummyFrame.toFront();
+            dummyFrame.setVisible(false);
+            
             ByteArrayOutputStream byteArray = new ByteArrayOutputStream();
             PrintStream messageStream = new PrintStream(byteArray);
             e.printStackTrace(messageStream);
             messageStream.flush();
-            
-            Toolkit.getDefaultToolkit().beep();
             String message = new String(byteArray.toByteArray(), StandardCharsets.UTF_8);
+            
             JOptionPane.showMessageDialog(
-                    null,
+                    dummyFrame,
                     message,
-                    "Game has crashed!",
+                    "Game crashed!",
                     JOptionPane.ERROR_MESSAGE
             );
-            throw e;
         }
         alcMakeContextCurrent(0);
         alcDestroyContext(SoundSystem.CONTEXT);

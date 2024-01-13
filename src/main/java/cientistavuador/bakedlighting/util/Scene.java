@@ -234,7 +234,7 @@ public class Scene {
     private float indirectLightReflectionFactor = 1f;
 
     private float rayOffset = 0.001f;
-    private boolean fillEmptyValuesWithLightColors = false;
+    private boolean fillDisabledValuesWithLightColors = false;
 
     private boolean fastModeEnabled = false;
 
@@ -346,12 +346,12 @@ public class Scene {
         this.fastModeEnabled = fastModeEnabled;
     }
 
-    public void setFillEmptyValuesWithLightColors(boolean fillEmptyValuesWithLightColors) {
-        this.fillEmptyValuesWithLightColors = fillEmptyValuesWithLightColors;
+    public void setFillDisabledValuesWithLightColors(boolean fillDisabledValuesWithLightColors) {
+        this.fillDisabledValuesWithLightColors = fillDisabledValuesWithLightColors;
     }
 
     public boolean fillEmptyValuesWithLightColors() {
-        return fillEmptyValuesWithLightColors;
+        return fillDisabledValuesWithLightColors;
     }
 
     public float getDirectLightingAttenuation() {
