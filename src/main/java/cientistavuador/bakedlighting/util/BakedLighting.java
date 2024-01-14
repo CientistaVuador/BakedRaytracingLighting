@@ -1252,7 +1252,6 @@ public class BakedLighting {
         final int yOffset = minY;
         final boolean[] sampleMap = new boolean[width * height * numSamples];
         final boolean[] boundsMap = new boolean[width * height];
-        final boolean[] ignoreMap = new boolean[width * height];
         final float[] colorMap = new float[width * height * 3];
         final float[] reversedShadowMap = new float[width * height];
 
@@ -1297,10 +1296,6 @@ public class BakedLighting {
                     reversedShadowMap[localX + (localY * width)] = reversedShadow;
 
                     boundsMap[localX + (localY * width)] = true;
-
-                    if (reversedShadow >= 0.9999994f) {
-                        ignoreMap[localX + (localY * width)] = true;
-                    }
                 }
             }
         }
@@ -1346,7 +1341,7 @@ public class BakedLighting {
 
         GaussianBlur.blur(
                 indirectIO,
-                41,
+                51,
                 this.scene.getIndirectLightingBlurArea()
         );
 
@@ -1368,12 +1363,7 @@ public class BakedLighting {
                 }
                 return !boundsMap[x + (y * width)];
             }
-
-            @Override
-            public boolean ignore(int x, int y) {
-                return ignoreMap[x + (y * width)];
-            }
-
+            
             @Override
             public void write(int x, int y, GaussianBlur.GaussianColor color) {
                 float shadow = (color.r + color.g + color.b) / 3f;
@@ -1395,7 +1385,7 @@ public class BakedLighting {
 
         GaussianBlur.blur(
                 reversedShadowIO,
-                41,
+                51,
                 this.scene.getShadowBlurArea()
         );
     }

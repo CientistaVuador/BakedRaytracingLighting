@@ -218,19 +218,19 @@ public class Scene {
     private final List<Geometry> geometries = new ArrayList<>();
     private final List<Light> lights = new ArrayList<>();
 
-    private SamplingMode samplingMode = SamplingMode.SAMPLE_5;
+    private SamplingMode samplingMode = SamplingMode.SAMPLE_9;
 
     private boolean directLightingEnabled = true;
     private float directLightingAttenuation = 0.75f;
 
     private boolean shadowsEnabled = true;
     private int shadowRaysPerSample = 12;
-    private float shadowBlurArea = 1.5f;
+    private float shadowBlurArea = 1f;
 
     private boolean indirectLightingEnabled = true;
     private int indirectRaysPerSample = 8;
     private int indirectBounces = 4;
-    private float indirectLightingBlurArea = 6f;
+    private float indirectLightingBlurArea = 4f;
     private float indirectLightReflectionFactor = 1f;
 
     private float rayOffset = 0.001f;
