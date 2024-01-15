@@ -94,10 +94,10 @@ public class Game {
             } else {
                 glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGB9_E5, this.lightmapSize, this.lightmapSize, this.groups.length, 0, GL_RGBA, GL_FLOAT, 0);
             }
-
+            
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-
+            
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
@@ -414,13 +414,16 @@ public class Game {
 
         String[] text = new String[]{
             new StringBuilder()
-            .append("R - Bake Lightmap\n")
-            .append(this.status.getASCIIProgressBar()).append('\n')
-            .append(this.status.getCurrentStatus()).append('\n')
-            .append(this.status.getRaysPerSecondFormatted()).append('\n')
-            .append("Video Memory Used By Lightmaps: ").append(getMemoryUsageFormatted()).append('\n')
-            .append("FPS: ").append(Main.FPS).append('\n')
-            .append("Estimated Time: ").append(this.status.getEstimatedTimeFormatted()).append("\n")
+                .append("ESC - Move Camera\n")
+                .append("I - Toggle Interior Lights\n")
+                .append("F - Toggle Sun\n")
+                .append("R - Bake Lightmap\n")
+                .append(this.status.getASCIIProgressBar()).append('\n')
+                .append(this.status.getCurrentStatus()).append('\n')
+                .append(this.status.getRaysPerSecondFormatted()).append('\n')
+                .append("Video Memory Used By Lightmaps: ").append(getMemoryUsageFormatted()).append('\n')
+                .append("FPS: ").append(Main.FPS).append('\n')
+                .append("Estimated Time: ").append(this.status.getEstimatedTimeFormatted()).append("\n")
             .toString()
         };
         GLFontRenderer.render(-0.895f, -0.605f, new GLFontSpecification[]{GLFontSpecifications.SPACE_MONO_REGULAR_0_035_BLACK}, text);
@@ -434,7 +437,7 @@ public class Game {
         if (!this.status.isDone()) {
             return;
         }
-        
+
         for (Geometry geo : this.scene.getGeometries()) {
             if (geo.getLightmapTextureHint() != Textures.EMPTY_LIGHTMAP) {
                 glDeleteTextures(geo.getLightmapTextureHint());
