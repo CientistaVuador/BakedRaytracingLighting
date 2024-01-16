@@ -45,6 +45,7 @@ import java.nio.DoubleBuffer;
 import java.nio.IntBuffer;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.joml.Vector3f;
+import org.lwjgl.PointerBuffer;
 import static org.lwjgl.glfw.GLFW.*;
 import org.lwjgl.glfw.GLFWFramebufferSizeCallbackI;
 import org.lwjgl.glfw.GLFWImage;
@@ -65,7 +66,7 @@ import static org.lwjgl.system.MemoryUtil.*;
  */
 public class Main {
 
-    public static final boolean USE_MSAA = false;
+    public static final boolean USE_MSAA = true;
     public static final boolean DEBUG_ENABLED = true;
     public static final boolean SPIKE_LAG_WARNINGS = false;
     public static final int MIN_UNIFORM_BUFFER_BINDINGS = UBOBindingPoints.MIN_NUMBER_OF_UBO_BINDING_POINTS;
@@ -203,8 +204,8 @@ public class Main {
     public static int HEIGHT = 600;
     public static int WINDOW_X = 0;
     public static int WINDOW_Y = 0;
-    public static int WINDOW_WIDTH = WIDTH;
-    public static int WINDOW_HEIGHT = HEIGHT;
+    public static int WINDOW_WIDTH = 800;
+    public static int WINDOW_HEIGHT = 600;
     public static double TPF = 1 / 60d;
     public static int FPS = 60;
     public static long WINDOW_POINTER = NULL;
@@ -493,31 +494,91 @@ public class Main {
                 if (!Main.FULLSCREEN) {
                     goFullscreen:
                     {
-                        long primary = glfwGetPrimaryMonitor();
-                        if (primary == NULL) {
-                            System.out.println("Warning: No Monitors Found.");
+                        int windowX;
+                        int windowY;
+                        int windowWidth;
+                        int windowHeight;
+
+                        try (MemoryStack stack = MemoryStack.stackPush()) {
+                            IntBuffer windowXBuffer = stack.mallocInt(1);
+                            IntBuffer windowYBuffer = stack.mallocInt(1);
+                            IntBuffer windowWidthBuffer = stack.mallocInt(1);
+                            IntBuffer windowHeightBuffer = stack.mallocInt(1);
+
+                            glfwGetWindowPos(window, windowXBuffer, windowYBuffer);
+                            glfwGetWindowSize(window, windowWidthBuffer, windowHeightBuffer);
+
+                            windowX = windowXBuffer.get();
+                            windowY = windowYBuffer.get();
+                            windowWidth = windowWidthBuffer.get();
+                            windowHeight = windowHeightBuffer.get();
+                        }
+
+                        long foundMonitor = NULL;
+                        int foundWidth = 0;
+                        int foundHeight = 0;
+                        int foundRefreshRate = 0;
+                        findWindowMonitor:
+                        {
+                            PointerBuffer monitors = glfwGetMonitors();
+                            if (monitors == null) {
+                                break findWindowMonitor;
+                            }
+
+                            int centerX = windowX + (windowWidth / 2);
+                            int centerY = windowY + (windowHeight / 2);
+
+                            for (int i = 0; i < monitors.capacity(); i++) {
+                                long monitorPointer = monitors.get(i);
+
+                                int monitorX;
+                                int monitorY;
+
+                                try (MemoryStack stack = MemoryStack.stackPush()) {
+                                    IntBuffer xpos = stack.mallocInt(1);
+                                    IntBuffer ypos = stack.mallocInt(1);
+
+                                    glfwGetMonitorPos(monitorPointer, xpos, ypos);
+
+                                    monitorX = xpos.get();
+                                    monitorY = ypos.get();
+                                }
+
+                                GLFWVidMode mode = glfwGetVideoMode(monitorPointer);
+
+                                if (mode == null) {
+                                    continue;
+                                }
+
+                                int monitorWidth = mode.width();
+                                int monitorHeight = mode.height();
+
+                                if (centerX < monitorX || centerY < monitorY) {
+                                    continue;
+                                }
+
+                                if (centerX > (monitorX + monitorWidth) || centerY > (monitorY + monitorHeight)) {
+                                    continue;
+                                }
+
+                                foundMonitor = monitorPointer;
+                                foundWidth = monitorWidth;
+                                foundHeight = monitorHeight;
+                                foundRefreshRate = mode.refreshRate();
+                            }
+                        }
+
+                        if (foundMonitor == NULL) {
+                            System.out.println("Warning: No Monitor Found For Fullscreen.");
                             break goFullscreen;
                         }
-                        GLFWVidMode mode = glfwGetVideoMode(primary);
-                        if (mode == null) {
-                            System.out.println("Warning: Video Mode Query Failed for " + glfwGetMonitorName(primary));
-                            break goFullscreen;
-                        }
-                        int[] windowX = {0};
-                        int[] windowY = {0};
-                        int[] windowWidth = {0};
-                        int[] windowHeight = {0};
-
-                        glfwGetWindowPos(window, windowX, windowY);
-                        glfwGetWindowSize(window, windowWidth, windowHeight);
-
-                        Main.savedWindowStatus[0] = windowX[0];
-                        Main.savedWindowStatus[1] = windowY[0];
-                        Main.savedWindowStatus[2] = windowWidth[0];
-                        Main.savedWindowStatus[3] = windowHeight[0];
-
-                        glfwSetWindowMonitor(window, primary, 0, 0, mode.width(), mode.height(), mode.refreshRate());
-                        Main.FULLSCREEN = true;
+                        
+                        Main.savedWindowStatus[0] = windowX;
+                        Main.savedWindowStatus[1] = windowY;
+                        Main.savedWindowStatus[2] = windowWidth;
+                        Main.savedWindowStatus[3] = windowHeight;
+                        
+                        glfwSetWindowMonitor(window, foundMonitor, 0, 0, foundWidth, foundHeight, foundRefreshRate);
                     }
                 } else {
                     glfwSetWindowMonitor(window, NULL, Main.savedWindowStatus[0], Main.savedWindowStatus[1], Main.savedWindowStatus[2], Main.savedWindowStatus[3], GLFW_DONT_CARE);
@@ -583,7 +644,7 @@ public class Main {
                 WINDOW_WIDTH = windowWidth.get();
                 WINDOW_HEIGHT = windowHeight.get();
             }
-            
+
             glfwPollEvents();
             glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
